@@ -9,7 +9,7 @@
 	<property name="package-name" value="org.example" />
 	<path id="compile.jspc">
         <fileset dir="${jetty-home}">
-            <include name="lib/servlet-api-3.1.jar" />
+            <include name="lib/servlet-api-${servlet-version}.jar" />
             <include name="lib/apache-jsp/*.jar" />
         </fileset>
     </path>
