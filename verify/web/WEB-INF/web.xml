@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<web-app
+   xmlns="http://java.sun.com/xml/ns/j2ee"
+   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+   xsi:schemaLocation="http://java.sun.com/xml/ns/j2ee http://xmlns.jcp.org/xml/ns/javaee/web-app_2_4.xsd"
+   version="2.4">  
+  <display-name>Transparent Authentication Application</display-name>
+  <servlet>
+    <servlet-name>HelloWorld</servlet-name>
+    <servlet-class>com.visibleautomation.verify.HelloWorld</servlet-class>
+  </servlet>
+  <servlet>
+    <servlet-name>Register</servlet-name>
+    <servlet-class>com.visibleautomation.verify.Register</servlet-class>
+  </servlet>
+  <servlet>
+    <servlet-name>Verify</servlet-name>
+    <servlet-class>com.visibleautomation.verify.Verify</servlet-class>
+  </servlet>
+  <servlet>
+    <servlet-name>Respond</servlet-name>
+    <servlet-class>com.visibleautomation.verify.Respond</servlet-class>
+  </servlet>
+
+  <servlet-mapping>
+    <servlet-name>HelloWorld</servlet-name>
+    <url-pattern>/hello</url-pattern>
+  </servlet-mapping>
+  <servlet-mapping>
+    <servlet-name>Register</servlet-name>
+    <url-pattern>/register</url-pattern>
+  </servlet-mapping>
+  <servlet-mapping>
+    <servlet-name>Verify</servlet-name>
+    <url-pattern>/verify</url-pattern>
+  </servlet-mapping>
+  <servlet-mapping>
+    <servlet-name>Respond</servlet-name>
+    <url-pattern>/respond</url-pattern>
+  </servlet-mapping>
+</web-app>

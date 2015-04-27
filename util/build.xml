@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project name="Util" default="jar" basedir=".">
+	<property file="../build.properties" />
+	<property name="jarfile" value="tmfa_util.jar" />
+	<path id="project.classpath">
+		<pathelement location="${jetty-lib}/servlet-api-3.1.jar" />
+		<pathelement location="${lib}/json-simple-1.1.1.jar" />
+		<pathelement location="${lib}/org.json-20130603.jar" />
+  	</path>
+	<tstamp prefix="build-info">
+		<format property="current-date" pattern="d-MMMM-yyyy" locale="en" />
+		<format property="current-time" pattern="hh:mm:ss a z" locale="en" />
+		<format property="year-month-day" pattern="yyyy-MM-dd" locale="en" />
+	</tstamp>
+	<target name="clean" description="clean the sources" >
+	    <delete dir="${classes-directory}" />
+	</target>
+ 	<target name="compile" description="compile the source " >
+		<pathconvert property="expanded.class.path" refid="project.classpath"/>
+		<echo message="${expanded.class.path}" />
+	    <mkdir dir="bin" />
+	    <javac srcdir="${src}" 
+		    destdir="${classes-directory}"
+		    classpathref="project.classpath" />
+  	</target>
+
+	<target name="jar" description="create the archive" depends="compile">
+	    <jar jarfile="${build-dir}/${jarfile}" basedir="${classes-directory}" />
+	</target>
+
+   <target name="deploy" depends="jar" description="deploy the jar file to jetty/lib/ext" >
+        <copy file="${build-dir}/${jarfile}" todir="${lib}" />
+    </target>
+</project>
+

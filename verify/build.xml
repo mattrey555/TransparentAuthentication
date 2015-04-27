@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project name="verify" default="war" basedir=".">
+	<property file="../build.properties" />
+	<property name="project-name" value="verify" />
+	<property name="war-file-name" value="${project-name}.war" />
+	<property name="web-xml-file" value="${web-dir}/WEB-INF/web.xml" />
+	<property name="web-lib-dir" value="${web-dir}/WEB-INF/lib" />
+
+	<tstamp prefix="build-info">
+		<format property="current-date" pattern="d-MMMM-yyyy" locale="en" />
+		<format property="current-time" pattern="hh:mm:ss a z" locale="en" />
+		<format property="year-month-day" pattern="yyyy-MM-dd" locale="en" />
+	</tstamp>
+	<path id="compile.classpath">
+	 	<pathelement location="${jetty-lib}/servlet-api-2.4.jar" />
+	 	<pathelement location="${jetty-lib}/jetty-server-${jetty-version}.jar" />
+	 	<pathelement location="${jetty-lib}/jetty-util-${jetty-version}.jar" />
+	    <pathelement location="${lib}/mysql-connector-java-5.1.34-bin.jar" />
+	    <pathelement location="${lib}/smack-tcp-4.0.7.jar" />
+		<pathelement location="${lib}/smack-core-4.0.7.jar" />
+		<pathelement location="${lib}/xpp3-1.1.4c.jar" />
+		<pathelement location="${lib}/org.json-20130603.jar" />
+	    <pathelement location="${lib}/json-simple-1.1.1.jar" />
+		<pathelement location="${lib}/xmpp_lib.jar" />
+	    <pathelement location="${lib}/tmfa_util.jar" />
+    </path>
+	<target name="war" depends="compile">
+		<mkdir dir="${build-directory}" />
+		<delete file="${build-directory}/${war-file-name}" />
+		<war destfile="${build-directory}/${war-file-name}" webxml="${web-xml-file}"> 
+			<classes dir="${classes-directory}" />
+			<manifest>
+				<attribute name="Built-By" value="${builder}" />
+				<attribute name="Built-On" value="${build-info.current-date}" />
+				<attribute name="Built-At" value="${build-info.current-time}" />
+			</manifest>
+		</war>
+	</target>
+
+ 	<target name="copy-libs" description="copy libraries to WEB-INF" >
+	    <copy todir="${web-lib-dir}" flatten="true">
+		<path>
+		    <path refid="jetty-classpath"/>
+		</path>
+	    </copy>
+        </target>
+
+ 	<target name="compile" description="compile the source" >
+	    <echo message="${jetty-home}" />
+		<mkdir dir="${classes-directory}" />
+	    <pathconvert property="expanded.class.path" refid="compile.classpath"/>
+            <echo message="${expanded.class.path}" />
+	    	<javac debug="yes"
+		   		srcdir="${src}" 
+		    	destdir="${classes-directory}"
+		    	classpathref="compile.classpath" />
+  	</target>
+
+	<target name="deploy" depends="war" description="deploy the war file to jetty" >
+	    <copy file="${build-directory}/${war-file-name}" todir="${jetty-home}/webapps" />
+	</target>
+       <target name="clean" description="clean the sources" >
+            <delete dir="${classes-directory}" />
+        </target>
+
+</project>
+

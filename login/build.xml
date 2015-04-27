@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project name="login" default="war" basedir=".">
+	<property file="../build.properties" />
+	<property name="project-name" value="login" />
+	<property name="war-file-name" value="${project-name}.war" />
+	<property name="web-xml-file" value="${web-dir}/WEB-INF/web.xml" />
+	<property name="web-lib-dir" value="${web-dir}/WEB-INF/lib" />
+	<property name="webapp-name" value="login" />
+	<property name="package-name" value="org.example" />
+	<path id="compile.jspc">
+        <fileset dir="${jetty-home}">
+            <include name="lib/servlet-api-3.1.jar" />
+            <include name="lib/apache-jsp/*.jar" />
+        </fileset>
+    </path>
+
+
+	<path id="compile.classpath">
+	 	<pathelement location="${jetty-lib}/servlet-api-3.1.jar" />
+	 	<pathelement location="${jetty-lib}/jetty-server-${jetty-version}.jar" />
+	 	<pathelement location="${jetty-lib}/jetty-util-${jetty-version}.jar" />
+	    <pathelement location="${jetty-ext}/mysql-connector-java-5.1.34-bin.jar" />
+	    <pathelement location="${jetty-jsp}/org.mortbay.jasper.apache-jsp-8.0.9.M3.jar" />
+	    <pathelement location="${jetty-jsp}/org.mortbay.jasper.apache-el-8.0.9.M3.jar" />
+		<pathelement location="${lib}/tmfa_util.jar" />
+    </path>
+	<tstamp prefix="build-info">
+		<format property="current-date" pattern="d-MMMM-yyyy" locale="en" />
+		<format property="current-time" pattern="hh:mm:ss a z" locale="en" />
+		<format property="year-month-day" pattern="yyyy-MM-dd" locale="en" />
+	</tstamp>
+
+	<target name="war" depends="compile-jspc,compile-servlets">
+		<mkdir dir="${build-directory}" />
+		<delete file="${build-directory}/${war-file-name}" />
+		<war destfile="${build-directory}/${war-file-name}" webxml="${web-xml-file}"> 
+			<classes dir="${classes-directory}" />
+			<manifest>
+				<attribute name="Built-By" value="${builder}" />
+				<attribute name="Built-On" value="${build-info.current-date}" />
+				<attribute name="Built-At" value="${build-info.current-time}" />
+			</manifest>
+		</war>
+	</target>
+
+ 	<target name="copy-libs" description="copy libraries to WEB-INF" >
+	    <copy todir="${web-lib-dir}" flatten="true">
+		<path>
+		    <path refid="jetty-classpath"/>
+		</path>
+	    </copy>
+        </target>
+
+ 	<target name="compile-jspc" depends="jspc" description="compile the jsp generated servlets" >
+	    <echo message="compile .java" />
+	    <pathconvert property="expanded.class.path" refid="compile.classpath"/>
+		<echo message="${expanded.class.path}" />
+	    <javac debug="yes"
+		   	srcdir="build/gen-src" 
+		    destdir="${classes-directory}"
+		    classpathref="compile.classpath" />
+  	</target>
+
+ 	<target name="compile-servlets" description="compile the source" >
+	    <echo message="compile .java" />
+	    <pathconvert property="expanded.class.path" refid="compile.classpath"/>
+		<echo message="${expanded.class.path}" />
+	    <javac debug="yes"
+		   	srcdir="src" 
+		    destdir="${classes-directory}"
+		    classpathref="compile.classpath" />
+  	</target>
+
+	<target name="jspc" description="compile JSP">
+	    <echo message="compile .jsp" />
+        <taskdef classname="org.apache.jasper.JspC" name="jasper2" classpathref="compile.jspc" />
+        <jasper2 
+			validateXml="false"
+	    	package="${package-name}.${webapp-name}"
+            uriroot="${web-dir}"
+            addWebXmlMappings="true"
+            webXmlFragment="${build-directory}/generated_web.xml"
+            compilerSourceVM="{java-version}"
+            compilerTargetVM="{java-version}"
+            outputDir="build/gen-src"
+            verbose="9" />
+    </target>
+
+	<target name="deploy" depends="war" description="deploy the war file to jetty" >
+	    <copy file="${build-directory}/${war-file-name}" todir="${jetty-home}/webapps" />
+	</target>
+</project>
+

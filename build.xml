@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project name="jetty-demo" basedir=".">
+	<property file="build.properties" />
+	<property name="lib" value="libs" />
+	<property name="web-dir" value="web" />
+	<property name="build-directory" value="build" />
+	<property name="jetty-home" value="/usr/share/jetty" />
+	<property name="jetty-ext" value="${jetty-home}/lib/ext" />
+
+	<target name="deploy" description="copy library files to jetty/lib/ext" >
+		<copy todir="${jetty-ext}">
+			<fileset dir="libs"/>
+		</copy>
+	</target>
+</project>
+

@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project name="TransparentAuthentication" default="jar" basedir=".">
+	<property file="../build.properties" />
+	<property name="jarfile" value="xmpp_lib.jar" />
+	<path id="project.class.path">
+    		<pathelement location="${lib}/smack-tcp-4.0.7.jar" />
+    		<pathelement location="${lib}/smack-core-4.0.7.jar" />
+    		<pathelement location="${lib}/json-simple-1.1.1.jar" />
+    		<pathelement location="${lib}/xpp3-1.1.4c.jar" />
+  	</path>
+	<tstamp prefix="build-info">
+		<format property="current-date" pattern="d-MMMM-yyyy" locale="en" />
+		<format property="current-time" pattern="hh:mm:ss a z" locale="en" />
+		<format property="year-month-day" pattern="yyyy-MM-dd" locale="en" />
+	</tstamp>
+	<target name="clean" description="clean the sources" >
+	    <delete dir="bin" />
+	</target>
+ 	<target name="compile" description="compile the source " >
+	    <mkdir dir="${classes-directory}" />
+	    <javac srcdir="${src}" 
+		    destdir="${classes-directory}"
+		    classpathref="project.class.path" />
+  	</target>
+	<target name="jar" description="create the archive" depends="compile">
+	    <jar jarfile="${build-directory}/${jarfile}" basedir="${classes-directory}" />
+	</target>
+	<target name="deploy" description="deploy the archive" depends="jar">
+		<copy file="${build-directory}/${jarfile}" todir="${lib}" />
+	</target>
+</project>
+

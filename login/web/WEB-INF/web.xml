@@ -1,0 +1,132 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<web-app
+   xmlns="http://java.sun.com/xml/ns/j2ee"
+   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+   xsi:schemaLocation="http://java.sun.com/xml/ns/j2ee http://xmlns.jcp.org/xml/ns/javaee/web-app_3_1.xsd"
+   version="3.1">  
+  <display-name>Login</display-name>
+<!--
+  <servlet id="login">
+       <servlet-name>login</servlet-name>
+       <servlet-class>org.apache.jasper.servlet.JspServlet</servlet-class>
+       <init-param>
+	   <param-name>logVerbosityLevel</param-name>
+	   <param-value>DEBUG</param-value>
+       </init-param>
+       <init-param>
+	   <param-name>fork</param-name>
+	   <param-value>false</param-value>
+       </init-param>
+       <init-param>
+	   <param-name>keepgenerated</param-name>
+	   <param-value>true</param-value>
+       </init-param>
+       <load-on-startup>0</load-on-startup>
+  </servlet>
+-->
+   <!--
+<servlet-mapping> <servlet-name>jsp</servlet-name>
+     <url-pattern>*.jsp</url-pattern>
+     <url-pattern>*.jspf</url-pattern>
+     <url-pattern>*.jspx</url-pattern>
+     <url-pattern>*.xsp</url-pattern>
+     <url-pattern>*.JSP</url-pattern>
+     <url-pattern>*.JSPF</url-pattern>
+     <url-pattern>*.JSPX</url-pattern>
+     <url-pattern>*.XSP</url-pattern>
+   </servlet-mapping>
+-->
+  <servlet>
+    <servlet-name>ProcessLoginServlet</servlet-name>
+    <servlet-class>org.example.login.ProcessLoginServlet</servlet-class>
+  </servlet>
+  <!-- JSPC servlet mappings start -->
+
+    <servlet>
+        <servlet-name>org.example.login.register_005ffailed_jsp</servlet-name>
+        <servlet-class>org.example.login.register_005ffailed_jsp</servlet-class>
+    </servlet>
+
+    <servlet>
+        <servlet-name>org.example.login.register_jsp</servlet-name>
+        <servlet-class>org.example.login.register_jsp</servlet-class>
+    </servlet>
+
+    <servlet>
+        <servlet-name>org.example.login.login_jsp</servlet-name>
+        <servlet-class>org.example.login.login_jsp</servlet-class>
+    </servlet>
+
+    <servlet>
+        <servlet-name>org.example.login.login_005fsuccessful_jsp</servlet-name>
+        <servlet-class>org.example.login.login_005fsuccessful_jsp</servlet-class>
+    </servlet>
+
+    <servlet>
+        <servlet-name>org.example.login.register_005fsuccessful_jsp</servlet-name>
+        <servlet-class>org.example.login.register_005fsuccessful_jsp</servlet-class>
+    </servlet>
+
+    <servlet>
+        <servlet-name>org.example.login.login_005ffailed_jsp</servlet-name>
+        <servlet-class>org.example.login.login_005ffailed_jsp</servlet-class>
+    </servlet>
+
+    <servlet>
+        <servlet-name>org.example.login.verify_005ffailed_jsp</servlet-name>
+        <servlet-class>org.example.login.verify_005ffailed_jsp</servlet-class>
+    </servlet>
+
+    <servlet-mapping>
+        <servlet-name>org.example.login.register_005ffailed_jsp</servlet-name>
+        <url-pattern>/register_failed.jsp</url-pattern>
+    </servlet-mapping>
+
+    <servlet-mapping>
+        <servlet-name>org.example.login.register_jsp</servlet-name>
+        <url-pattern>/register.jsp</url-pattern>
+    </servlet-mapping>
+
+    <servlet-mapping>
+        <servlet-name>org.example.login.login_jsp</servlet-name>
+        <url-pattern>/login.jsp</url-pattern>
+    </servlet-mapping>
+
+    <servlet-mapping>
+        <servlet-name>org.example.login.login_005fsuccessful_jsp</servlet-name>
+        <url-pattern>/login_successful.jsp</url-pattern>
+    </servlet-mapping>
+
+    <servlet-mapping>
+        <servlet-name>org.example.login.register_005fsuccessful_jsp</servlet-name>
+        <url-pattern>/register_successful.jsp</url-pattern>
+    </servlet-mapping>
+
+    <servlet-mapping>
+        <servlet-name>org.example.login.login_005ffailed_jsp</servlet-name>
+        <url-pattern>/login_failed.jsp</url-pattern>
+    </servlet-mapping>
+
+    <servlet-mapping>
+        <servlet-name>org.example.login.verify_005ffailed_jsp</servlet-name>
+        <url-pattern>/verify_failed.jsp</url-pattern>
+    </servlet-mapping>
+
+<!-- JSPC servlet mappings end -->
+
+<servlet-mapping>
+    <servlet-name>ProcessLoginServlet</servlet-name>
+    <url-pattern>/processLogin</url-pattern>
+  </servlet-mapping>
+
+  <servlet>
+    <servlet-name>ProcessRegisterServlet</servlet-name>
+    <servlet-class>org.example.login.ProcessRegisterServlet</servlet-class>
+  </servlet>
+  <servlet-mapping>
+    <servlet-name>ProcessRegisterServlet</servlet-name>
+    <url-pattern>/processRegister</url-pattern>
+  </servlet-mapping>
+
+     
+</web-app>
