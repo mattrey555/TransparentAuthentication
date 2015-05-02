@@ -92,41 +92,45 @@ public class Respond extends HttpServlet {
 		try {
 			RequestSet requestSet = RequestSet.getInstance();
 			ResponseData responseData = requestSet.getResponseData(requestId);
-			String postData = ServletUtil.readPostData(request);
-			System.out.println("post data = " + postData);
-			if (requestId != null) {
-				if (!traceroute) {
-					JSONObject jsonObject = new JSONObject(postData);
-					System.out.println("JSON data = " + jsonObject);
-					double latitude  = jsonObject.optDouble("latitude", BAD_LOCATION);
-					double longitude  = jsonObject.optDouble("longitude", BAD_LOCATION);
-					String macAddress = jsonObject.getString("bssid");
+			if (responseData == null) {
+				System.out.println("error: no response data for " + requestId);
+			} else {
+				String postData = ServletUtil.readPostData(request);
+				System.out.println("post data = " + postData);
+				if (requestId != null) {
+					if (!traceroute) {
+						JSONObject jsonObject = new JSONObject(postData);
+						System.out.println("JSON data = " + jsonObject);
+						double latitude  = jsonObject.optDouble("latitude", BAD_LOCATION);
+						double longitude  = jsonObject.optDouble("longitude", BAD_LOCATION);
+						String macAddress = jsonObject.getString("bssid");
 
-					if ((longitude != BAD_LOCATION) && (latitude != BAD_LOCATION)) {
-						responseData.latitude = latitude;
-						responseData.longitude = longitude;
-						responseData.handsetIPAddress = ipAddress;
-						if (macAddress != null) {
-							responseData.wifiMACAddress = macAddress;
-							updateLocationMacAddress(requestId, macAddress, latitude, longitude, ipAddress);
+						if ((longitude != BAD_LOCATION) && (latitude != BAD_LOCATION)) {
+							responseData.latitude = latitude;
+							responseData.longitude = longitude;
+							responseData.handsetIPAddress = ipAddress;
+							if (macAddress != null) {
+								responseData.wifiMACAddress = macAddress;
+								updateLocationMacAddress(requestId, macAddress, latitude, longitude, ipAddress);
+							} else {
+								updateLocation(requestId, latitude, longitude, ipAddress);
+							}
 						} else {
-							updateLocation(requestId, latitude, longitude, ipAddress);
+							updateMacAddress(requestId, macAddress, ipAddress);
 						}
+						String forwardTraceroute = ProcessUtil.pipeCommand(String.format(TRACEROUTE_CMD, ipAddress));
+						System.out.println("forward traceroute : " + forwardTraceroute);
+						responseData.forwardTraceroute = StringUtil.splitList(forwardTraceroute, "\n");
 					} else {
-						updateMacAddress(requestId, macAddress, ipAddress);
+						// parse GSON POST data.
+						JSONArray jsonArray = new JSONArray(postData);
+						List<String> reverseTraceroute = new ArrayList<String>(jsonArray.length());
+						for (int i = 0; i < jsonArray.length(); i++) {
+							reverseTraceroute.add((String) jsonArray.get(i));
+						}
+						responseData.reverseTraceroute = reverseTraceroute;
+						requestSet.notify(requestId);
 					}
-					String forwardTraceroute = ProcessUtil.pipeCommand(String.format(TRACEROUTE_CMD, ipAddress));
-					System.out.println("forward traceroute : " + forwardTraceroute);
-					responseData.forwardTraceroute = StringUtil.splitList(forwardTraceroute, "\n");
-				} else {
-					// parse GSON POST data.
-					JSONArray jsonArray = new JSONArray(postData);
-					List<String> reverseTraceroute = new ArrayList<String>(jsonArray.length());
-					for (int i = 0; i < jsonArray.length(); i++) {
-						reverseTraceroute.add((String) jsonArray.get(i));
-					}
-					responseData.reverseTraceroute = reverseTraceroute;
-					requestSet.notify(requestId);
 				}
 			}
 		} catch (Exception ex) {

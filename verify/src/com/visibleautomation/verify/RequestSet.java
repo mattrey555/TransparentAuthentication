@@ -37,7 +37,6 @@ public class RequestSet {
 			} catch (InterruptedException iex) {
 			}
 		}
-		removeRequest(request);
 		return response;
 	}
 

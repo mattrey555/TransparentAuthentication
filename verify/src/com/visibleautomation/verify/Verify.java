@@ -11,6 +11,7 @@ import java.util.UUID;
 import java.util.Date;
 import java.util.ArrayList;
 import java.util.List;
+import java.net.InetAddress;
 import javax.servlet.http.*;
 import java.sql.SQLException;
 import java.sql.Statement;
@@ -31,7 +32,8 @@ public class Verify extends HttpServlet {
 	private static final String PHONE_NUMBER = "phoneNumber"; 
 	private static final String CLIENT_ID = "clientId"; 
 	private static final String MAX_HOPS = "maxHops"; 
-	private static final String IPADDRESS = "ipAddress"; 
+	private static final String SITE_IPADDRESS = "siteIPAddress"; 
+	private static final String TERMINAL_IPADDRESS = "terminalIPAddress"; 
 	private static final String TIMEOUT_MSEC = "timeoutMsec"; 
 	private static final String REGISTRATION_ID = "registration_id";
 	private static final String REQUEST_TABLE = "request";
@@ -65,7 +67,8 @@ public class Verify extends HttpServlet {
 		String phoneNumber = null; 
 		String clientId = null; 
 		String errorMessage = "Success";
-		String ipAddress = null;
+		String terminalIPAddress = null;
+		String siteIPAddress = null;
 		int maxHops = 16;
 		int errorCode = SUCCESS;
 		int timeoutMsec = 20000;
@@ -75,14 +78,18 @@ public class Verify extends HttpServlet {
 				for (String pair : pairs) {
 					String param = getParam(pair); 
 					String value = getValue(pair); 
+					System.out.println("param = " + param + " value = " + value);
 					if (param.equals(PHONE_NUMBER)) {
 						phoneNumber = value;
-					}               
+					}              
 					if (param.equals(CLIENT_ID)) {
 						clientId = value;
 					}               
-					if (param.equals(IPADDRESS)) {
-						ipAddress = value;
+					if (param.equals(SITE_IPADDRESS)) {
+						siteIPAddress = value;
+					}               
+					if (param.equals(TERMINAL_IPADDRESS)) {
+						terminalIPAddress = value;
 					}               
 					if (param.equals(MAX_HOPS)) {
 						maxHops = Integer.valueOf(value);
@@ -102,14 +109,15 @@ public class Verify extends HttpServlet {
 		System.out.println("parameters parsed");
 		System.out.println("phoneNumber = " + phoneNumber);
 		System.out.println("clientId = " + clientId);
-		System.out.println("ipAddress = " + ipAddress);
+		System.out.println("siteIPAddress = " + siteIPAddress);
+		System.out.println("terminalIPAddress = " + terminalIPAddress);
 		System.out.println("maxHops = " + maxHops);
 		System.out.println("timeoutMsec = " + timeoutMsec);
 		System.out.println("requestId = " + requestId);
         String postData = ServletUtil.readPostData(request);
         System.out.println("post data = " + postData);
 		JSONObject jsonObject = new JSONObject(postData);
-		String terminalIPAddress = jsonObject.getString("terminalIPAddress");
+		String terminalIPAddressFromJSON = jsonObject.getString("terminalIPAddress");
 		JSONArray terminalTracerouteJSON = jsonObject.getJSONArray("traceroute");
 		List<String> terminalTraceroute = new ArrayList<String>(terminalTracerouteJSON.length());
 		for (int i = 0; i < terminalTracerouteJSON.length(); i++) {
@@ -120,12 +128,22 @@ public class Verify extends HttpServlet {
 				String userId = getGCMessagingID(phoneNumber);
 				System.out.println("sending message to " + userId);
 				if (userId != null) {
+
+					// add a request with a Unique # and add it to the outstanding request list.
 					RequestSet requestSet = RequestSet.getInstance();
 					requestSet.addRequest(requestId, new ResponseData());
 					initRequest(requestId);
+
+					// get this server's IP address
 					String serverAddress = url.getHost();
+					InetAddress serverInetAddress = InetAddress.getByName(url.getHost());
+					String serverIP = serverInetAddress.getHostAddress();
 					int serverPort = url.getPort();
-					verifyIPAddress(userId, ipAddress, maxHops, timeoutMsec, requestId, serverAddress, serverPort);
+
+					// request a verification from the handset
+					verifyIPAddress(userId, siteIPAddress, maxHops, timeoutMsec, requestId, serverIP, serverPort);
+
+					// wait on the first response from the handset with the location and Connected MAC address
 					ResponseData responseData = requestSet.waitOnResponse(requestId, timeoutMsec);
 					responseData.terminalTraceroute = terminalTraceroute;
 					PrintWriter out = response.getWriter();
@@ -151,6 +169,7 @@ public class Verify extends HttpServlet {
 							out.println(ip + " ");
 						}
 					}
+					requestSet.removeRequest(requestId);
 				} else {
 					errorCode = USER_NOT_FOUND;
 				}
@@ -217,7 +236,7 @@ public class Verify extends HttpServlet {
 		/**
 		 * Send an XMPP Push Notification requesting a verification from the handset
 		 * toRegId GCM messaging ID.
-		 * destIPAddress IP address to request a reverse traceroute to.
+		 * destIPAddress IP address to request a reverse traceroute to. (the site IPAddress)
 		 * maxHops maximum # of hops to request on reverse traceroute
 		 * timeoutMsec response timeout
 		 * requestId requestID unique identifier, so we can associate the response from the handset.
@@ -230,32 +249,32 @@ public class Verify extends HttpServlet {
 						   final String requestId,
 						   final String requestIp,
 						   final int requestPort) {
-		System.out.println("sending message to " + toRegId);
+			System.out.println("sending message to " + toRegId);
 			final long senderId = 1012198772634L; // your GCM sender id
 			final String password = "AIzaSyDUuok4W2TqMR9vKmkQd66Fm9j3SYxhHQo";
-		mVerificationResult = null;
-		try {
-			SmackCcsClient ccsClient = new SmackCcsClient();
+			mVerificationResult = null;
+			try {
+				SmackCcsClient ccsClient = new SmackCcsClient();
 
-			ccsClient.connect(senderId, password);
+				ccsClient.connect(senderId, password);
 
-			// Send a sample hello downstream message to a device.
-			String messageId = ccsClient.nextMessageId();
-			Map<String, String> payload = new HashMap<String, String>();
-			payload.put("RequestAuthorization", "Request");
-			payload.put("destIpAddress", destIpAddress);
-			payload.put("requestId", requestId);
-			payload.put("maxHops", Integer.toString(maxHops));
-			payload.put("EmbeddedMessageId", messageId);
-			payload.put("requestIp", requestIp);
-			payload.put("requestPort", Integer.toString(requestPort));
-			payload.put("delivery_receipt_requested", "true");
-			String collapseKey = "sample";
-			Long timeToLive = 20000L;
-			String message = createJsonMessage(toRegId, messageId, payload, collapseKey, timeToLive, true);
-			System.out.println("sending " + message);
-			ccsClient.sendDownstreamMessage(message);
-		} catch (Exception ex) {
+				// Send a sample hello downstream message to a device.
+				String messageId = ccsClient.nextMessageId();
+				Map<String, String> payload = new HashMap<String, String>();
+				payload.put("RequestAuthorization", "Request");
+				payload.put("destIpAddress", destIpAddress);
+				payload.put("requestId", requestId);
+				payload.put("maxHops", Integer.toString(maxHops));
+				payload.put("EmbeddedMessageId", messageId);
+				payload.put("requestIp", requestIp);
+				payload.put("requestPort", Integer.toString(requestPort));
+				payload.put("delivery_receipt_requested", "true");
+				String collapseKey = "sample";
+				Long timeToLive = 20000L;
+				String message = createJsonMessage(toRegId, messageId, payload, collapseKey, timeToLive, true);
+				System.out.println("sending " + message);
+				ccsClient.sendDownstreamMessage(message);
+			} catch (Exception ex) {
 			ex.printStackTrace();
 		}
 	}
