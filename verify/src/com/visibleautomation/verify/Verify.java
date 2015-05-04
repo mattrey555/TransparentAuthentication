@@ -11,7 +11,11 @@ import java.util.UUID;
 import java.util.Date;
 import java.util.ArrayList;
 import java.util.List;
+import java.lang.Thread;
+import java.lang.Runnable;
 import java.net.InetAddress;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import javax.servlet.http.*;
 import java.sql.SQLException;
 import java.sql.Statement;
@@ -27,6 +31,7 @@ import org.json.simple.JSONValue;
 import org.json.simple.parser.ParseException;
 import org.xmlpull.v1.XmlPullParser;
 import com.visibleautomation.util.ServletUtil;
+import com.visibleautomation.util.StreamUtil;
 
 public class Verify extends HttpServlet {
 	private static final String PHONE_NUMBER = "phoneNumber"; 
@@ -46,6 +51,7 @@ public class Verify extends HttpServlet {
 	private static final int POLL_MSEC = 100;
     private static final String SELECT_BY_PHONE = "select * from user where phone_number=?";
 	private static final String INSERT_REQUEST_ID = "INSERT INTO request (request_id, request_timestamp) VALUES (?, ?)"; 
+	private static final String REQUEST_IP_LOCATION = "http://ipinfo.io/%s/json";
 	private static String mVerificationResult;
 
 
@@ -131,8 +137,11 @@ public class Verify extends HttpServlet {
 
 					// add a request with a Unique # and add it to the outstanding request list.
 					RequestSet requestSet = RequestSet.getInstance();
-					requestSet.addRequest(requestId, new ResponseData());
+					ResponseData responseData = new ResponseData();
+					requestSet.addRequest(requestId, responseData);
+					responseData.terminalIPAddress = terminalIPAddress;
 					initRequest(requestId);
+					getTerminalLocationInBackground(responseData);
 
 					// get this server's IP address
 					String serverAddress = url.getHost();
@@ -144,13 +153,14 @@ public class Verify extends HttpServlet {
 					verifyIPAddress(userId, siteIPAddress, maxHops, timeoutMsec, requestId, serverIP, serverPort);
 
 					// wait on the first response from the handset with the location and Connected MAC address
-					ResponseData responseData = requestSet.waitOnResponse(requestId, timeoutMsec);
+					responseData = requestSet.waitOnResponse(requestId, timeoutMsec);
 					responseData.terminalTraceroute = terminalTraceroute;
 					PrintWriter out = response.getWriter();
-					out.println("longitude = " + responseData.longitude);
-					out.println("latitude = " + responseData.latitude);
+					out.println("longitude = " + responseData.handsetLongitude);
+					out.println("latitude = " + responseData.handsetLatitude);
 					out.println("handsetIPAddress = " + responseData.handsetIPAddress);
 					out.println("wifiMACAddress = " + responseData.wifiMACAddress);
+					out.println(String.format("terminal location %.4f %.4f", responseData.terminalLatitude, responseData.terminalLongitude));
 					if (responseData.forwardTraceroute != null) {
 						out.println("forward traceroute");
 						for (String ip : responseData.forwardTraceroute) {
@@ -179,7 +189,7 @@ public class Verify extends HttpServlet {
 		}
 	}
 
-
+	// retreive the Google Cloud Messaging ID for the user's phone number
 	private String getGCMessagingID(String phoneNumber) throws Exception {
 		String userId = null;
 		Class.forName("com.mysql.jdbc.Driver");
@@ -205,6 +215,7 @@ public class Verify extends HttpServlet {
 		return userId;
 	}
 
+	// initialize the request by storing the request ID and the timestamp.
 	public void initRequest(String requestId) throws Exception {
 		long timestamp = new Date().getTime();
 		Class.forName("com.mysql.jdbc.Driver");
@@ -224,6 +235,7 @@ public class Verify extends HttpServlet {
         return URLDecoder.decode(pair.substring(0, idx), "UTF-8");
 	}
 
+	// get the value for the spectified parameter name
 	public String getValue(String pair) throws UnsupportedEncodingException {
         int idx = pair.indexOf("=");
         return URLDecoder.decode(pair.substring(idx + 1), "UTF-8");
@@ -233,22 +245,22 @@ public class Verify extends HttpServlet {
       // do nothing.
 	}
 
-		/**
-		 * Send an XMPP Push Notification requesting a verification from the handset
-		 * toRegId GCM messaging ID.
-		 * destIPAddress IP address to request a reverse traceroute to. (the site IPAddress)
-		 * maxHops maximum # of hops to request on reverse traceroute
-		 * timeoutMsec response timeout
-		 * requestId requestID unique identifier, so we can associate the response from the handset.
-		 * requestIp Address of this servlet to send the response to.
-		 */
-		public static void verifyIPAddress(final String toRegId, 
-						   final String destIpAddress, 
-						   final int maxHops, 
-						   int timeoutMsec, 
-						   final String requestId,
-						   final String requestIp,
-						   final int requestPort) {
+	/**
+	 * Send an XMPP Push Notification requesting a verification from the handset
+	 * toRegId GCM messaging ID.
+	 * destIPAddress IP address to request a reverse traceroute to. (the site IPAddress)
+	 * maxHops maximum # of hops to request on reverse traceroute
+	 * timeoutMsec response timeout
+	 * requestId requestID unique identifier, so we can associate the response from the handset.
+	 * requestIp Address of this servlet to send the response to.
+	 */
+	public static void verifyIPAddress(final String toRegId, 
+				   final String destIpAddress, 
+				   final int maxHops, 
+				   int timeoutMsec, 
+				   final String requestId,
+				   final String requestIp,
+				   final int requestPort) {
 			System.out.println("sending message to " + toRegId);
 			final long senderId = 1012198772634L; // your GCM sender id
 			final String password = "AIzaSyDUuok4W2TqMR9vKmkQd66Fm9j3SYxhHQo";
@@ -271,7 +283,7 @@ public class Verify extends HttpServlet {
 				payload.put("delivery_receipt_requested", "true");
 				String collapseKey = "sample";
 				Long timeToLive = 20000L;
-				String message = createJsonMessage(toRegId, messageId, payload, collapseKey, timeToLive, true);
+				String message = createGCMMessage(toRegId, messageId, payload, collapseKey, timeToLive, true);
 				System.out.println("sending " + message);
 				ccsClient.sendDownstreamMessage(message);
 			} catch (Exception ex) {
@@ -291,9 +303,9 @@ public class Verify extends HttpServlet {
      * @param delayWhileIdle GCM delay_while_idle parameter (Optional).
      * @return JSON encoded GCM message.
      */
-    public static String createJsonMessage(String to, String messageId,
-            Map<String, String> payload, String collapseKey, Long timeToLive,
-            Boolean delayWhileIdle) {
+    public static String createGCMMessage(String to, String messageId,
+					  Map<String, String> payload, String collapseKey, Long timeToLive,
+					  Boolean delayWhileIdle) {
         Map<String, Object> message = new HashMap<String, Object>();
         message.put("to", to);
         if (collapseKey != null) {
@@ -309,4 +321,44 @@ public class Verify extends HttpServlet {
       message.put("data", payload);
       return JSONValue.toJSONString(message);
     }
+
+    /**
+     * parse the latitude longitude from ipinfo.io {
+  	 * "ip": "24.17.219.54",
+     * "hostname": "c-24-17-219-54.hsd1.wa.comcast.net",
+     * "city": "Bellevue",
+     * "region": "Washington",
+     * "country": "US",
+     * "loc": "47.6201,-122.1408",
+     * "org": "AS7922 Comcast Cable Communications, Inc.",
+     * "postal": "98007"
+     * }
+     */
+    public static void getTerminalLocation(ResponseData responseData) throws IOException {
+		URL locationURL = new URL(String.format(REQUEST_IP_LOCATION, responseData.terminalIPAddress));
+		HttpURLConnection conn = (HttpURLConnection)  locationURL.openConnection();
+		InputStream is = conn.getInputStream();
+		String responseStr = StreamUtil.readToString(is);
+		JSONObject jsonObject = new JSONObject(responseStr);
+		String locationStr = jsonObject.getString("loc");
+		String[] latlon = locationStr.split(",");
+		responseData.terminalLatitude = Double.parseDouble(latlon[0]);
+		responseData.terminalLongitude = Double.parseDouble(latlon[1]);
+
+
+	}
+
+	public static void getTerminalLocationInBackground(final ResponseData responseData) {
+		Thread thread = new Thread(new Runnable() {
+			public void run() {
+				try {
+					getTerminalLocation(responseData);
+				} catch (IOException ioex) {
+					System.out.println("unable to read data from location service for terminal");
+					ioex.printStackTrace();
+				}
+			}
+		});
+		thread.start();
+	}
 } 

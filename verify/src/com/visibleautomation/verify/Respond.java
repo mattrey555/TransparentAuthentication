@@ -25,6 +25,10 @@ import com.visibleautomation.util.ServletUtil;
 import com.visibleautomation.util.StringUtil;
 import com.visibleautomation.util.ProcessUtil;
 
+// rad the responses from the handset.
+// there are two responses: the Wifi MAC address (bssid) and location
+// and the reverse traceroute from the handset
+
 public class Respond extends HttpServlet {
 	private static final String REQUEST_ID = "requestId"; 
 	private static final String MAC_ADDRESS = "macAddress"; 
@@ -42,6 +46,9 @@ public class Respond extends HttpServlet {
 	private static final String UPDATE_LOCATION_MACADDRESS = "UPDATE request set latitude=?,longitude=?,wifi_mac_addr=?,handset_ip_address=? WHERE request_id=?";
 	private static final String UPDATE_MACADDRESS = "UPDATE REQUEST SET WIFI_MAC_ADDR=?,HANDSET_IP_ADDRESS=? WHERE REQUEST_ID=?";
 	private static final String TRACEROUTE_CMD = "traceroute -n --module=udp --queries=1 %s -w 0.25 --back | grep -v \"\\*\" | grep -o \"[0-9]*\\.[0-9]*\\.[0-9]*\\.[0-9]*\"";
+	private static final String JSON_TAG_LATITUDE = "latitude";
+	private static final String JSON_TAG_LONGITUDE = "longitude";
+	private static final String JSON_TAG_BSSSID = "bssid";
 	private static final double BAD_LOCATION = -500.0;
 
 	public Respond() {
@@ -101,13 +108,13 @@ public class Respond extends HttpServlet {
 					if (!traceroute) {
 						JSONObject jsonObject = new JSONObject(postData);
 						System.out.println("JSON data = " + jsonObject);
-						double latitude  = jsonObject.optDouble("latitude", BAD_LOCATION);
-						double longitude  = jsonObject.optDouble("longitude", BAD_LOCATION);
+						double latitude  = jsonObject.optDouble(JSON_TAG_LATITUDE, BAD_LOCATION);
+						double longitude  = jsonObject.optDouble(JSON_TAG_LONGITUDE, BAD_LOCATION);
 						String macAddress = jsonObject.getString("bssid");
 
 						if ((longitude != BAD_LOCATION) && (latitude != BAD_LOCATION)) {
-							responseData.latitude = latitude;
-							responseData.longitude = longitude;
+							responseData.handsetLatitude = latitude;
+							responseData.handsetLongitude = longitude;
 							responseData.handsetIPAddress = ipAddress;
 							if (macAddress != null) {
 								responseData.wifiMACAddress = macAddress;
@@ -138,6 +145,7 @@ public class Respond extends HttpServlet {
 		}
 	}
 
+	// update the user's location and MAC address in the database
 	private void updateLocationMacAddress(String requestId, String macAddress, double latitude, double longitude, String ipAddress) throws Exception {
 		Class.forName("com.mysql.jdbc.Driver");
 		Connection con = DriverManager.getConnection(Constants.DB_CONNECTION, SQL_USER, SQL_PASSWORD);
@@ -154,6 +162,7 @@ public class Respond extends HttpServlet {
 		}
 	}
 
+    // update the user's location in the database
 	private void updateLocation(String requestId, double latitude, double longitude, String ipAddress) throws Exception {
 		Class.forName("com.mysql.jdbc.Driver");
 		Connection con = DriverManager.getConnection(Constants.DB_CONNECTION, SQL_USER, SQL_PASSWORD);
@@ -169,6 +178,7 @@ public class Respond extends HttpServlet {
 		}
 	}
 
+	// update the user's connected Wifi MAC address in the daabase
 	private void updateMacAddress(String requestId, String macAddress, String ipAddress) throws Exception {
 		Class.forName("com.mysql.jdbc.Driver");
 		Connection con = DriverManager.getConnection(Constants.DB_CONNECTION, SQL_USER, SQL_PASSWORD);
