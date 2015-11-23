@@ -1,68 +1,65 @@
 package com.visibleautomation.xmpp;
-import org.jivesoftware.smack.ConnectionConfiguration;
 import org.jivesoftware.smack.ConnectionConfiguration.SecurityMode;
 import org.jivesoftware.smack.ConnectionListener;
-import org.jivesoftware.smack.PacketInterceptor;
-import org.jivesoftware.smack.PacketListener;
 import org.jivesoftware.smack.SmackException;
 import org.jivesoftware.smack.SmackException.NotConnectedException;
 import org.jivesoftware.smack.XMPPConnection;
 import org.jivesoftware.smack.XMPPException;
-import org.jivesoftware.smack.filter.PacketTypeFilter;
-import org.jivesoftware.smack.packet.DefaultPacketExtension;
+import org.jivesoftware.smack.packet.DefaultExtensionElement;
 import org.jivesoftware.smack.packet.Message;
-import org.jivesoftware.smack.packet.Packet;
-import org.jivesoftware.smack.packet.PacketExtension;
-import org.jivesoftware.smack.provider.PacketExtensionProvider;
+import org.jivesoftware.smack.packet.Stanza;
+import org.jivesoftware.smack.filter.StanzaFilter;
 import org.jivesoftware.smack.provider.ProviderManager;
 import org.jivesoftware.smack.tcp.XMPPTCPConnection;
+import org.jivesoftware.smack.tcp.XMPPTCPConnectionConfiguration;
 import org.jivesoftware.smack.util.StringUtils;
 import org.json.simple.JSONValue;
 import org.json.simple.parser.ParseException;
 import org.xmlpull.v1.XmlPullParser;
+import org.jivesoftware.smack.*;
+import org.jivesoftware.smack.packet.ExtensionElement;
+import org.jivesoftware.smack.provider.ExtensionElementProvider;
+import org.jivesoftware.smack.roster.Roster;
 
-import java.util.Map.Entry;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
-import java.util.logging.Level;
-import java.util.logging.Logger;
+
 
 import javax.net.ssl.SSLSocketFactory;
 
 /**
  * Sample Smack implementation of a client for GCM Cloud Connection Server. This
  * code can be run as a standalone CCS client.
+ *
+ * <p>For illustration purposes only.
  */
 public class SmackCcsClient {
 
-    private static final Logger logger = Logger.getLogger("SmackCcsClient");
-
     private static final String GCM_SERVER = "gcm.googleapis.com";
     private static final int GCM_PORT = 5235;
-    private static final int POLL_MSEC = 100;
 
     private static final String GCM_ELEMENT_NAME = "gcm";
     private static final String GCM_NAMESPACE = "google:mobile:data";
-    private static String mVerificationResult;
-    private static final long SENDER_ID = 1012198772634L; 
-	private static final String PASSWORD = "AIzaSyDUuok4W2TqMR9vKmkQd66Fm9j3SYxhHQo";
 
+    private static final String YOUR_PROJECT_ID = "1012198772634";
+    private static final String YOUR_API_KEY = "AIzaSyDUuok4W2TqMR9vKmkQd66Fm9j3SYxhHQo";
+    private static final String YOUR_PHONE_REG_ID = "APA91bFD5cQ-6Byhk5ZyXCnICB6D4zbmzFBifhiIHZTxYqqEGtuzX2q8eNJFxzjBZpwQRf-maLGRK9L5yvv3_y07lo0Bue6-nEElYeHhq9aelzSvS5xdV6_5nkrNFKfSFZ-MIrJIp97y-6AEG5VSexfa2TUtUcOiRz4Hns-6Vky9NgAFc5x4oQs";
+    
     static {
 
-        ProviderManager.addExtensionProvider(GCM_ELEMENT_NAME, GCM_NAMESPACE,
-            new PacketExtensionProvider() {
-                @Override
-                public PacketExtension parseExtension(XmlPullParser parser) throws
-                        Exception {
-                    String json = parser.nextText();
-                    return new GcmPacketExtension(json);
-                }
-            });
+        ProviderManager.addExtensionProvider(GCM_ELEMENT_NAME, GCM_NAMESPACE, new  ExtensionElementProvider<ExtensionElement>() {
+            @Override
+            public DefaultExtensionElement parse(XmlPullParser parser,int initialDepth) throws org.xmlpull.v1.XmlPullParserException,
+            IOException {
+                String json = parser.nextText();
+                return new GcmPacketExtension(json);
+            }
+        });
     }
 
-    private XMPPConnection connection;
+    private XMPPTCPConnection connection;
 
     /**
      * Indicates whether the connection is in draining state, which means that it
@@ -75,13 +72,12 @@ public class SmackCcsClient {
      *
      * @return true if the message has been successfully sent.
      */
-    public boolean sendDownstreamMessage(String jsonRequest) throws
-            NotConnectedException {
+    public boolean sendDownstreamMessage(String jsonRequest) throws NotConnectedException, InterruptedException {
         if (!connectionDraining) {
             send(jsonRequest);
             return true;
         }
-        logger.info("Dropping downstream message since the connection is draining");
+        System.out.println("Dropping downstream message since the connection is draining");
         return false;
     }
 
@@ -98,41 +94,33 @@ public class SmackCcsClient {
     /**
      * Sends a packet with contents provided.
      */
-    protected void send(String jsonRequest) throws NotConnectedException {
-        Packet request = new GcmPacketExtension(jsonRequest).toPacket();
-        connection.sendPacket(request);
+    protected void send(String jsonRequest) throws NotConnectedException, InterruptedException {
+        Stanza request = new GcmPacketExtension(jsonRequest).toPacket();
+        connection.sendStanza(request);
     }
 
-   /**
+    /**
      * Handles an upstream data message from a device application.
      *
      * <p>This sample echo server sends an echo message back to the device.
      * Subclasses should override this method to properly process upstream messages.
      */
-    protected void handleUpstreamMessage(Map<String, Object> jsonObject) {
+    protected void handleUpstreamMessage(Map<String, Object> jsonObject) throws InterruptedException {
         // PackageName of the application that sent this message.
         String category = (String) jsonObject.get("category");
         String from = (String) jsonObject.get("from");
         @SuppressWarnings("unchecked")
         Map<String, String> payload = (Map<String, String>) jsonObject.get("data");
-        System.out.println("payload");
-        for (Entry<String, String> entry : payload.entrySet()) {
-            System.out.println(entry.getKey() + " = " + entry.getValue());
-        }
-        if (mVerificationResult == null) {
-            mVerificationResult = payload.get("verificationData");
-        }
-        System.out.println("verficiation result = " + mVerificationResult);
-        /*
         payload.put("ECHO", "Application: " + category);
+
         // Send an ECHO response back
         String echo = createJsonMessage(from, nextMessageId(), payload, "echo:CollapseKey", null, false);
         try {
             sendDownstreamMessage(echo);
         } catch (NotConnectedException e) {
-            logger.log(Level.WARNING, "Not connected anymore, echo message is not sent", e);
+            System.out.println("Not connected anymore, echo message is not sent");
         }
-        */
+        
     }
 
     /**
@@ -144,7 +132,7 @@ public class SmackCcsClient {
     protected void handleAckReceipt(Map<String, Object> jsonObject) {
         String messageId = (String) jsonObject.get("message_id");
         String from = (String) jsonObject.get("from");
-        logger.log(Level.INFO, "handleAckReceipt() from: " + from + ", messageId: " + messageId);
+        System.out.println("handleAckReceipt() from: " + from + ",messageId: " + messageId);
     }
 
     /**
@@ -156,16 +144,16 @@ public class SmackCcsClient {
     protected void handleNackReceipt(Map<String, Object> jsonObject) {
         String messageId = (String) jsonObject.get("message_id");
         String from = (String) jsonObject.get("from");
-        logger.log(Level.INFO, "handleNackReceipt() from: " + from + ", messageId: " + messageId);
+        System.out.println("handleNackReceipt() from: " + from + ",messageId: " + messageId);
     }
 
     protected void handleControlMessage(Map<String, Object> jsonObject) {
-        logger.log(Level.INFO, "handleControlMessage(): " + jsonObject);
+        System.out.println("handleControlMessage(): " + jsonObject);
         String controlType = (String) jsonObject.get("control_type");
         if ("CONNECTION_DRAINING".equals(controlType)) {
             connectionDraining = true;
         } else {
-            logger.log(Level.INFO, "Unrecognized control type: %s. This could happen if new features are " + "added to the CCS protocol.", controlType);
+            System.out.println(String.format("Unrecognized control type: %s. This could happen if new features are " + "added to the CCS protocol.", controlType));
         }
     }
 
@@ -173,7 +161,7 @@ public class SmackCcsClient {
      * Creates a JSON encoded GCM message.
      *
      * @param to RegistrationId of the target device (Required).
-     * @param messageId Unique messageId for which CCS will send an
+     * @param messageId Unique messageId for which CCS sends an
      *         "ack/nack" (Required).
      * @param payload Message content intended for the application. (Optional).
      * @param collapseKey GCM collapse_key parameter (Optional).
@@ -222,88 +210,123 @@ public class SmackCcsClient {
      * @param senderId Your GCM project number
      * @param apiKey API Key of your project
      */
-    public void connect(long senderId, String apiKey) throws XMPPException, IOException, SmackException {
-        ConnectionConfiguration config = new ConnectionConfiguration(GCM_SERVER, GCM_PORT);
-        config.setSecurityMode(SecurityMode.enabled);
-        config.setReconnectionAllowed(true);
-        config.setRosterLoadedAtLogin(false);
-        config.setSendPresence(false);
-        config.setSocketFactory(SSLSocketFactory.getDefault());
-
+    public void connect(String senderId, String apiKey)
+            throws XMPPException, IOException, SmackException, InterruptedException {
+	System.out.println("senderId = " + senderId + " apiKey = " + apiKey);
+    	XMPPTCPConnectionConfiguration config =
+    			XMPPTCPConnectionConfiguration.builder()
+    		     .setHost(GCM_SERVER)
+    		     .setCompressionEnabled(false)
+    		     .setPort(GCM_PORT)
+    		     .setConnectTimeout(30000)
+    		     .setSecurityMode(SecurityMode.disabled)
+    		     .setSendPresence(false)
+    		     .setSocketFactory(SSLSocketFactory.getDefault())
+    		    .build();
+    	
         connection = new XMPPTCPConnection(config);
+        
+        //disable Roster as I don't think this is supported by GCM
+        Roster roster = Roster.getInstanceFor(connection);
+        roster.setRosterLoadedAtLogin(false);
+
+        System.out.println("Connecting...");
         connection.connect();
 
         connection.addConnectionListener(new LoggingConnectionListener());
 
         // Handle incoming packets
-        connection.addPacketListener(new PacketListener() {
-
-            @Override
-            public void processPacket(Packet packet) {
-		System.out.println("received incoming packet " + packet.toXML());
-                logger.log(Level.INFO, "Received: " + packet.toXML());
-                Message incomingMessage = (Message) packet;
-                GcmPacketExtension gcmPacket =
-                        (GcmPacketExtension) incomingMessage.
-                        getExtension(GCM_NAMESPACE);
-                String json = gcmPacket.getJson();
-                try {
-                    @SuppressWarnings("unchecked")
-                    Map<String, Object> jsonObject = (Map<String, Object>) JSONValue.parseWithException(json);
-
-                    // present for "ack"/"nack", null otherwise
-                    Object messageType = jsonObject.get("message_type");
-
-                    if (messageType == null) {
-                          logger.log(Level.INFO, "received data message");
-                        // Normal upstream data message
-                        handleUpstreamMessage(jsonObject);
-
-                        // Send ACK to CCS
-                        String messageId = (String) jsonObject.get("message_id");
-                        String from = (String) jsonObject.get("from");
-                        String ack = createJsonAck(from, messageId);
-                        send(ack);
-                    } else if ("ack".equals(messageType.toString())) {
-                          // Process Ack
-                          handleAckReceipt(jsonObject);
-                    } else if ("nack".equals(messageType.toString())) {
-                          // Process Nack
-                          handleNackReceipt(jsonObject);
-                    } else if ("control".equals(messageType.toString())) {
-                          // Process control message
-                          handleControlMessage(jsonObject);
-                    } else {
-                          logger.log(Level.WARNING, "Unrecognized message type (%s)", messageType.toString());
-                    }
-                } catch (ParseException e) {
-                    logger.log(Level.SEVERE, "Error parsing JSON " + json, e);
-                } catch (Exception e) {
-                    logger.log(Level.SEVERE, "Failed to process packet", e);
-                }
-            }
-        }, new PacketTypeFilter(Message.class));
+        connection.addAsyncStanzaListener(new MyStanzaListener() , new MyStanzaFilter());
 
         // Log all outgoing packets
-        connection.addPacketInterceptor(new PacketInterceptor() {
-            @Override
-                public void interceptPacket(Packet packet) {
-                    logger.log(Level.INFO, "Sent: {0}", packet.toXML());
-                }
-            }, new PacketTypeFilter(Message.class));
+        connection.addPacketInterceptor(new MyStanzaInterceptor(), new MyStanzaFilter());
 
-        connection.login(senderId + "@gcm.googleapis.com", apiKey);
+        connection.login(senderId + "@gcm.googleapis.com" , apiKey);
+        
     }
+    
+    private class MyStanzaFilter implements StanzaFilter {
+    
+		@Override
+		public boolean accept(Stanza arg0) {
+			// TODO Auto-generated method stub
+			if(arg0.getClass() == Stanza.class) {
+				return true;
+			} else {
+/*
+				if (arg0.getTo()!= null) {
+					if(arg0.getTo().startsWith(YOUR_PROJECT_ID)) {
+						return true;
+					}
+				}
+*/
+			}
+			return false;
+		}
+    }
+    
+    private class MyStanzaListener implements StanzaListener{
+		
+        @Override
+        public void processPacket(Stanza packet) {
+            System.out.println("Received: " + packet.toXML());
+            Message incomingMessage = (Message) packet;
+            GcmPacketExtension gcmPacket = (GcmPacketExtension) incomingMessage.getExtension(GCM_NAMESPACE);
+            String json = gcmPacket.getJson();
+            try {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> jsonObject = (Map<String, Object>) JSONValue.parseWithException(json);
+
+                // present for "ack"/"nack", null otherwise
+                Object messageType = jsonObject.get("message_type");
+
+                if (messageType == null) {
+                    // Normal upstream data message
+                    handleUpstreamMessage(jsonObject);
+
+                    // Send ACK to CCS
+                    String messageId = (String) jsonObject.get("message_id");
+                    String from = (String) jsonObject.get("from");
+                    String ack = createJsonAck(from, messageId);
+                    send(ack);
+                } else if ("ack".equals(messageType.toString())) {
+                      // Process Ack
+                      handleAckReceipt(jsonObject);
+                } else if ("nack".equals(messageType.toString())) {
+                      // Process Nack
+                      handleNackReceipt(jsonObject);
+                } else if ("control".equals(messageType.toString())) {
+                      // Process control message
+                      handleControlMessage(jsonObject);
+                } else {
+                      System.out.println(String.format("Unrecognized message type (%s)", messageType.toString()));
+                }
+            } catch (ParseException e) {
+                System.out.println("Error parsing JSON " + json);
+            } catch (Exception e) {
+                System.out.println("Failed to process packet");
+            }
+        }
+    
+    }
+    
+    private class MyStanzaInterceptor implements StanzaListener {
+    	@Override
+        public void processPacket(Stanza packet) {
+    		System.out.println("Sent: {0}" + packet.toXML());
+    	}
+    }
+    
 
     /**
      * XMPP Packet Extension for GCM Cloud Connection Server.
      */
-    private static final class GcmPacketExtension extends DefaultPacketExtension {
+    private static final class GcmPacketExtension extends DefaultExtensionElement   {
 
         private final String json;
 
         public GcmPacketExtension(String json) {
-            super(GCM_ELEMENT_NAME, GCM_NAMESPACE);
+        	super(GCM_ELEMENT_NAME, GCM_NAMESPACE);
             this.json = json;
         }
 
@@ -318,7 +341,7 @@ public class SmackCcsClient {
                     StringUtils.escapeForXML(json), GCM_ELEMENT_NAME);
         }
 
-        public Packet toPacket() {
+        public Stanza toPacket() {
             Message message = new Message();
             message.addExtension(this);
             return message;
@@ -331,43 +354,38 @@ public class SmackCcsClient {
         @Override
         public void connected(XMPPConnection xmppConnection) {
             System.out.println("Connected.");
-            logger.info("Connected.");
         }
-
-        @Override
-        public void authenticated(XMPPConnection xmppConnection) {
-            System.out.println("Authenticated.");
-            logger.info("Authenticated.");
-        }
+        
 
         @Override
         public void reconnectionSuccessful() {
-            System.out.println("Reconnecting.");
-            logger.info("Reconnecting..");
+            System.out.println("Reconnecting..");
         }
 
         @Override
         public void reconnectionFailed(Exception e) {
-            System.out.println("Reconnection failed.");
-            logger.log(Level.INFO, "Reconnection failed.. ", e);
+            System.out.println("Reconnection failed.. ");
         }
 
         @Override
         public void reconnectingIn(int seconds) {
-            System.out.println("Reconnecting in " + seconds + " secs");
-            logger.log(Level.INFO, "Reconnecting in %d secs", seconds);
+            System.out.println(String.format("Reconnecting in %d secs", seconds));
         }
 
         @Override
         public void connectionClosedOnError(Exception e) {
             System.out.println("Connection closed on error.");
-            logger.info("Connection closed on error.");
         }
 
         @Override
         public void connectionClosed() {
             System.out.println("Connection closed.");
-            logger.info("Connection closed.");
         }
+
+		@Override
+		public void authenticated(XMPPConnection arg0, boolean arg1) {
+			// TODO Auto-generated method stub
+			
+		}
     }
 }
