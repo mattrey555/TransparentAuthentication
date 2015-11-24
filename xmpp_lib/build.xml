@@ -3,8 +3,11 @@
 	<property file="../build.properties" />
 	<property name="jarfile" value="xmpp_lib.jar" />
 	<path id="project.class.path">
-    		<pathelement location="${lib}/smack-tcp-4.0.7.jar" />
-    		<pathelement location="${lib}/smack-core-4.0.7.jar" />
+    		<pathelement location="${lib}/smack-tcp-${smack-version}.jar" />
+    		<pathelement location="${lib}/smack-core-${smack-version}.jar" />
+    		<pathelement location="${lib}/smack-im-${smack-version}.jar" />
+    		<pathelement location="${lib}/smack-java7-${smack-version}.jar" />
+    		<pathelement location="${lib}/smack-sasl-provided-${smack-version}.jar" />
     		<pathelement location="${lib}/json-simple-1.1.1.jar" />
     		<pathelement location="${lib}/xpp3-1.1.4c.jar" />
   	</path>
@@ -15,16 +18,29 @@
 	</tstamp>
 	<target name="clean" description="clean the sources" >
 	    <delete dir="bin" />
+	    <delete dir="build" />
 	</target>
- 	<target name="compile" description="compile the source " >
+        <target name="mkdirs">
+            <mkdir dir="${classes-directory}" />
+            <mkdir dir="${build-directory}" />
+        </target>
+
+ 	<target name="compile" depends="mkdirs" description="compile the source" >
 	    <mkdir dir="${classes-directory}" />
 	    <javac srcdir="${src}" 
 		    destdir="${classes-directory}"
-		    classpathref="project.class.path" />
+		    classpathref="project.class.path" 
+		    debug="yes"/>
   	</target>
-	<target name="jar" description="create the archive" depends="compile">
-	    <jar jarfile="${build-directory}/${jarfile}" basedir="${classes-directory}" />
-	</target>
+        <target name="jar" description="create the archive" depends="compile">
+            <jar jarfile="${build-directory}/${jarfile}" basedir="${classes-directory}" >
+		<manifest>
+		    <attribute name="Main-Class" value="com.visibleautomation.xmpp.SmackTest"/>
+		    <attribute name="Class-Path" value="smack-tcp-${smack-version}.jar smack-core-${smack-version}.jar smack-im-${smack-version}.jar smack-java7-${smack-version}.jar smack-sasl-provided-${smack-version}.jar json-simple-1.1.1.jar xpp3-1.1.4c.jar jxmpp-core-0.4.2.jar jxmpp-util-cache-0.4.2.jar" />
+		</manifest>
+            </jar>
+        </target>
+
 	<target name="deploy" description="deploy the archive" depends="jar">
 		<copy file="${build-directory}/${jarfile}" todir="${lib}" />
 	</target>

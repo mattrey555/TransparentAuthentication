@@ -20,6 +20,13 @@ import org.jivesoftware.smack.*;
 import org.jivesoftware.smack.packet.ExtensionElement;
 import org.jivesoftware.smack.provider.ExtensionElementProvider;
 import org.jivesoftware.smack.roster.Roster;
+import org.jivesoftware.smack.util.stringencoder.Base64;
+import org.jivesoftware.smack.util.XmlStringBuilder;
+import org.jivesoftware.smack.sasl.packet.SaslStreamElements.AuthMechanism;
+import org.jivesoftware.smack.packet.PlainStreamElement;
+import org.jivesoftware.smack.sasl.packet.SaslStreamElements;
+import org.jivesoftware.smack.SASLAuthentication;
+import org.jivesoftware.smack.sasl.provided.SASLPlainMechanism;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -37,15 +44,13 @@ import javax.net.ssl.SSLSocketFactory;
  */
 public class SmackCcsClient {
 
-    private static final String GCM_SERVER = "gcm.googleapis.com";
-    private static final int GCM_PORT = 5235;
+    //private static final String GCM_SERVER = "gcm.googleapis.com";
+    private static final String GCM_SERVER = "gcm-preprod.googleapis.com";
+    private static final int GCM_PORT = 5236;
 
     private static final String GCM_ELEMENT_NAME = "gcm";
     private static final String GCM_NAMESPACE = "google:mobile:data";
-
     private static final String YOUR_PROJECT_ID = "1012198772634";
-    private static final String YOUR_API_KEY = "AIzaSyDUuok4W2TqMR9vKmkQd66Fm9j3SYxhHQo";
-    private static final String YOUR_PHONE_REG_ID = "APA91bFD5cQ-6Byhk5ZyXCnICB6D4zbmzFBifhiIHZTxYqqEGtuzX2q8eNJFxzjBZpwQRf-maLGRK9L5yvv3_y07lo0Bue6-nEElYeHhq9aelzSvS5xdV6_5nkrNFKfSFZ-MIrJIp97y-6AEG5VSexfa2TUtUcOiRz4Hns-6Vky9NgAFc5x4oQs";
     
     static {
 
@@ -216,14 +221,19 @@ public class SmackCcsClient {
     	XMPPTCPConnectionConfiguration config =
     			XMPPTCPConnectionConfiguration.builder()
     		     .setHost(GCM_SERVER)
+				 .setServiceName(GCM_SERVER)
     		     .setCompressionEnabled(false)
     		     .setPort(GCM_PORT)
+			     //.setUsernameAndPassword(senderId + "@gcm.googleapis.com", apiKey) 
+			     .setUsernameAndPassword(senderId, apiKey) 
     		     .setConnectTimeout(30000)
+				 .setDebuggerEnabled(true)
     		     .setSecurityMode(SecurityMode.disabled)
     		     .setSendPresence(false)
     		     .setSocketFactory(SSLSocketFactory.getDefault())
     		    .build();
     	
+        //connection = new FixedXMPPTCPConnection(config, senderId, apiKey);
         connection = new XMPPTCPConnection(config);
         
         //disable Roster as I don't think this is supported by GCM
@@ -231,6 +241,8 @@ public class SmackCcsClient {
         roster.setRosterLoadedAtLogin(false);
 
         System.out.println("Connecting...");
+		connection.setPacketReplyTimeout(10000);
+		//SASLAuthentication.supportSASLMechanism("PLAIN", 0);
         connection.connect();
 
         connection.addConnectionListener(new LoggingConnectionListener());
@@ -388,4 +400,43 @@ public class SmackCcsClient {
 			
 		}
     }
+
+	private static class FixedXMPPTCPConnection extends XMPPTCPConnection {
+		private String authenticationId;
+		private String password;
+
+		public FixedXMPPTCPConnection(XMPPTCPConnectionConfiguration config, String authenticationId, String password) {
+			super(config);
+			this.authenticationId = authenticationId;
+			this.password = password;
+		}
+	 
+		@Override
+        public void send(PlainStreamElement auth) throws NotConnectedException
+        {
+            if(auth instanceof AuthMechanism)
+            {           
+                final XmlStringBuilder xml = new XmlStringBuilder();
+                xml.halfOpenElement(AuthMechanism.ELEMENT)
+                .xmlnsAttribute(SaslStreamElements.NAMESPACE)
+                .attribute("mechanism", "X-OAUTH2")
+                .attribute("auth:service", "oauth2")
+                .attribute("xmlns:auth", "http://www.google.com/gcm/protocol/auth")
+                .rightAngleBracket()
+                .optAppend(Base64.encodeToString(StringUtils.toBytes("\0" + authenticationId + "\0" + password)))
+                .closeElement(AuthMechanism.ELEMENT);                   
+                 super.send(new PlainStreamElement()
+                 {
+                    @Override
+                    public String toXML()
+                    {
+						System.out.println("xml sent: " + xml.toString());
+                        return xml.toString();
+                    }                        
+                 });                 
+            } else {
+				super.send(auth);
+			}
+        }
+	}
 }
