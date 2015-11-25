@@ -23,6 +23,7 @@
 		<pathelement location="${lib}/smack-sasl-provided-${smack-version}.jar" />
 		<pathelement location="${lib}/xpp3-1.1.4c.jar" />
 		<pathelement location="${lib}/org.json-20130603.jar" />
+		<pathelement location="${lib}/gson-${gson-version}.jar" /> 
 	    <pathelement location="${lib}/json-simple-1.1.1.jar" />
 		<pathelement location="${lib}/xmpp_lib.jar" />
 	    <pathelement location="${lib}/tmfa_util.jar" />

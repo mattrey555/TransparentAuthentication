@@ -67,9 +67,11 @@ public class Verify extends HttpServlet {
 	private static final String REQUEST_IP_LOCATION = "http://ipinfo.io/%s/json";
 	private static String mVerificationResult;
 
-	static {
-		System.out.println("static initializer");
-	}
+    static {
+        System.out.println("Verify: static initialization for sql.properties");
+		Constants.setDatabaseVariables();
+		Constants.setGCMVariables();
+    }
 
 	public Verify() {
 		System.out.println("constructor is called");
@@ -210,7 +212,8 @@ public class Verify extends HttpServlet {
 	private String getGCMessagingID(String phoneNumber) throws Exception {
 		String userId = null;
 		Class.forName("com.mysql.jdbc.Driver");
-		Connection con = DriverManager.getConnection(Constants.DB_CONNECTION, SQL_USER, SQL_PASSWORD);
+		String dbConnection = String.format(Constants.DB_CONNECTION_FORMAT, Constants.sdbDatabase);
+		Connection con = DriverManager.getConnection(dbConnection, Constants.sdbUsername, Constants.sdbPassword);
 		try {
 			PreparedStatement selectStatement = con.prepareStatement(SELECT_BY_PHONE);
 			selectStatement.setString(1, phoneNumber);
@@ -236,7 +239,8 @@ public class Verify extends HttpServlet {
 	public void initRequest(String requestId) throws Exception {
 		long timestamp = new Date().getTime();
 		Class.forName("com.mysql.jdbc.Driver");
-		Connection con = DriverManager.getConnection(Constants.DB_CONNECTION, SQL_USER, SQL_PASSWORD);
+		String dbConnection = String.format(Constants.DB_CONNECTION_FORMAT, Constants.sdbDatabase);
+		Connection con = DriverManager.getConnection(dbConnection, Constants.sdbUsername, Constants.sdbPassword);
 		try {
 			PreparedStatement insertStatement = con.prepareStatement(INSERT_REQUEST_ID);
 			insertStatement.setString(1, requestId);
@@ -285,7 +289,7 @@ public class Verify extends HttpServlet {
 			try {
 				SmackCcsClient ccsClient = new SmackCcsClient();
 
-				ccsClient.connect(senderId, password);
+				ccsClient.connect(Constants.sGCMProjectId, Constants.sGCMApiKey);
 
 				// Send a sample hello downstream message to a device.
 				String messageId = ccsClient.nextMessageId();

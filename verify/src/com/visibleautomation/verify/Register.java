@@ -17,6 +17,7 @@ import java.net.URL;
 import java.net.URLDecoder;
 import java.util.Map;
 import javax.servlet.http.*;
+import com.google.gson.Gson;
 
 // user (ID INT, CLIENT_USER_ID VARCHAR(64) NOT NULL, USER_ID VARCHAR(64) NOT NULL, phone_number varchar(64) PRIMARY KEY(ID)
 // client (ID INT, CLIENT_ID VARCHAR(64) NOT NULL, CLIENT_USER_ID VARCHAR(64) NOT NULL, PRIMARY KEY (ID));
@@ -27,11 +28,13 @@ public class Register extends HttpServlet {
 	private static final int PHONE_ALREADY_REGISTERED = 3;
 	private static final String JSON_FORMAT = "{ \"registrationId\" : \"%s\", \"statusCode\" : %d, \"errorMessage\" : \"%s\" }";
 	private static final String SELECT_BY_PHONE = "select * from user where phone_number=?";
-	private static final String INSERT_CLIENT = "insert into user values (0,?,?,?)";
+	private static final String INSERT_CLIENT = "insert into user values (0,?,?,?,?)";
 
-	// url is of the form <servlet-name>/register?registrationId=XXX&phoneNumber=XXX
-  	private static final String REGISTRATION_ID = "registrationId"; 
-  	private static final String PHONE_NUMBER = "phoneNumber"; 
+    static {
+        System.out.println("Verify: static initialization for properties");
+		Constants.setDatabaseVariables();
+		Constants.setGCMVariables();
+    }
 
   	public Register() {
 		System.out.println("constructor is called");
@@ -43,73 +46,50 @@ public class Register extends HttpServlet {
       	System.out.println("init is getting called");
   	}
 
-  	public void doGet(HttpServletRequest 	request,
-                      HttpServletResponse 	response)
+  	public void doPost(HttpServletRequest 	request,
+                       HttpServletResponse 	response)
 		throws ServletException, IOException {
 
       	// Set response content type
       	String urlStr = request.getRequestURL().toString();
       	URL url = new URL(urlStr); 
       	response.setContentType("application/json");
-      	System.out.println("doGet is getting called query = " + request.getQueryString());
-      	String[] pairs = request.getQueryString().split("&");
-	  	String phoneNumber = null;
-	  	String registrationId = null;
+        BufferedReader br = request.getReader();
+		Gson gson = new Gson();
+        RegistrationRequest registrationRequest = gson.fromJson(br, RegistrationRequest.class);
 
-		// extract the phone number and registration ID.  phone number is visible to the 3rd party
-		// registration ID is not.
-		String errorMessage = "Success";
-		int errorCode = SUCCESS;
-	  	try {
-		  	for (String pair : pairs) {
-				String param = getParam(pair);
-				String value = getValue(pair);
-				if (param.equals(PHONE_NUMBER)) {
-					phoneNumber = value;
-				}
-				if (param.equals(REGISTRATION_ID)) {
-					registrationId = value;
-				}
-		  	}
+		String dburl = String.format(Constants.DB_CONNECTION_FORMAT, Constants.sdbDatabase);
+	    int errorCode = SUCCESS;
+	    String errorMessage = null;
+								    
+		try {
+			Class.forName("com.mysql.jdbc.Driver");
+			Connection con = DriverManager.getConnection(dburl, Constants.sdbUsername, Constants.sdbPassword);
+			PreparedStatement selectStatement = con.prepareStatement(SELECT_BY_PHONE);
+			selectStatement.setString(1, registrationRequest.getPhoneNumber());
+			ResultSet rs = selectStatement.executeQuery();
+			if (rs.first()) {
+				errorCode = PHONE_ALREADY_REGISTERED;
+				errorMessage = "Phone already registered";
+			}
+			rs.close();
+			PreparedStatement insertStatement = con.prepareStatement(INSERT_CLIENT);
+			String clientUserId = UUID.randomUUID().toString();
+			insertStatement.setString(1, clientUserId);
+			insertStatement.setString(2, registrationRequest.getRegistrationId());
+			insertStatement.setString(3, registrationRequest.getPhoneNumber());
+			insertStatement.setString(4, registrationRequest.getPublicKey());
+			insertStatement.execute();
 		} catch (Exception ex) {
-			errorMessage = ex.getMessage();
-			errorCode = BAD_URL;
-			phoneNumber = null;
-			registrationId = null;
+            errorMessage = ex.getMessage();
+            errorCode = DATABASE_CONNECTION_FAILED;
+			System.out.println("threw an exception connection to " + url);
+			ex.printStackTrace();
 		}
-	  	if ((phoneNumber != null) && (registrationId != null)) {
-	
-		  	String dburl = "jdbc:mysql://localhost:3306/transparent_authentication";
-		  	try {
-		    	Class.forName("com.mysql.jdbc.Driver");
-				Connection con = DriverManager.getConnection(dburl, "verify", "FiatX1/9");
-				PreparedStatement selectStatement = con.prepareStatement(SELECT_BY_PHONE);
-				selectStatement.setString(1, phoneNumber);
-				ResultSet rs = selectStatement.executeQuery();
-				if (rs.first()) {
-					errorCode = PHONE_ALREADY_REGISTERED;
-					errorMessage = "Phone already registered";
-				}
-				rs.close();
-				PreparedStatement insertStatement = con.prepareStatement(INSERT_CLIENT);
-				insertStatement.setString(1, registrationId);
-				insertStatement.setString(2, UUID.randomUUID().toString());
-				insertStatement.setString(3, phoneNumber);
-				insertStatement.execute();
-		  	} catch (Exception ex) {
-				errorMessage = ex.getMessage();
-				errorCode = DATABASE_CONNECTION_FAILED;
-				System.out.println("threw an exception connection to " + url);
-				ex.printStackTrace();
-		  	}
-		} else {
-			errorMessage = "must specify a phone number and registration ID";
-			errorCode = BAD_URL;
-	    }
-		String json = String.format(JSON_FORMAT, registrationId, errorCode, errorMessage);
-      	PrintWriter out = response.getWriter();
-		out.println(json);
-		System.out.println(json);
+        String json = String.format(JSON_FORMAT, registrationRequest.getRegistrationId(), errorCode, errorMessage);
+        PrintWriter out = response.getWriter();
+        out.println(json);
+        System.out.println(json);
   }
 
   public String getParam(String pair) throws UnsupportedEncodingException {

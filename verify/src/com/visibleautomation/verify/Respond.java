@@ -36,8 +36,6 @@ public class Respond extends HttpServlet {
 	private static final String LONGITUDE = "longitude"; 
 	private static final String TRACEROUTE = "traceroute"; 
 	private static final String REQUEST_TABLE = "request";
-	private static final String SQL_USER = "verify";
-	private static final String SQL_PASSWORD = "FiatX1/9";
 	private static final int SUCCESS = 0;
 	private static final int BAD_URL = 1;
 	private static final int USER_NOT_FOUND = 2;
@@ -50,6 +48,13 @@ public class Respond extends HttpServlet {
 	private static final String JSON_TAG_LONGITUDE = "longitude";
 	private static final String JSON_TAG_BSSSID = "bssid";
 	private static final double BAD_LOCATION = -500.0;
+
+
+    static {
+        System.out.println("Verify: static initialization for sql.properties");
+		Constants.setDatabaseVariables();
+		Constants.setGCMVariables();
+    }
 
 	public Respond() {
 		System.out.println("Respond: constructor");
@@ -148,7 +153,8 @@ public class Respond extends HttpServlet {
 	// update the user's location and MAC address in the database
 	private void updateLocationMacAddress(String requestId, String macAddress, double latitude, double longitude, String ipAddress) throws Exception {
 		Class.forName("com.mysql.jdbc.Driver");
-		Connection con = DriverManager.getConnection(Constants.DB_CONNECTION, SQL_USER, SQL_PASSWORD);
+		String dbConnection = String.format(Constants.DB_CONNECTION_FORMAT, Constants.sdbDatabase);
+		Connection con = DriverManager.getConnection(dbConnection, Constants.sdbUsername, Constants.sdbPassword);
 		try {
 			PreparedStatement updateStatement = con.prepareStatement(UPDATE_LOCATION_MACADDRESS);
 			updateStatement.setDouble(1, latitude);
@@ -165,7 +171,8 @@ public class Respond extends HttpServlet {
     // update the user's location in the database
 	private void updateLocation(String requestId, double latitude, double longitude, String ipAddress) throws Exception {
 		Class.forName("com.mysql.jdbc.Driver");
-		Connection con = DriverManager.getConnection(Constants.DB_CONNECTION, SQL_USER, SQL_PASSWORD);
+		String dbConnection = String.format(Constants.DB_CONNECTION_FORMAT, Constants.sdbDatabase);
+		Connection con = DriverManager.getConnection(dbConnection, Constants.sdbUsername, Constants.sdbPassword);
 		try {
 			PreparedStatement updateStatement = con.prepareStatement(UPDATE_LOCATION);
 			updateStatement.setDouble(1, latitude);
@@ -181,7 +188,8 @@ public class Respond extends HttpServlet {
 	// update the user's connected Wifi MAC address in the daabase
 	private void updateMacAddress(String requestId, String macAddress, String ipAddress) throws Exception {
 		Class.forName("com.mysql.jdbc.Driver");
-		Connection con = DriverManager.getConnection(Constants.DB_CONNECTION, SQL_USER, SQL_PASSWORD);
+		String dbConnection = String.format(Constants.DB_CONNECTION_FORMAT, Constants.sdbDatabase);
+		Connection con = DriverManager.getConnection(dbConnection, Constants.sdbUsername, Constants.sdbPassword);
 		try {
 			PreparedStatement updateStatement = con.prepareStatement(UPDATE_LOCATION);
 			updateStatement.setString(1, macAddress);
