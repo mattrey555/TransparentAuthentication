@@ -55,8 +55,6 @@ public class Verify extends HttpServlet {
 	// timeout to connect to clinet
 	private static final String TIMEOUT_MSEC = "timeoutMsec"; 
 
-	private static final String SQL_USER = "verify";
-	private static final String SQL_PASSWORD = "FiatX1/9";
 	private static final int SUCCESS = 0;
 	private static final int BAD_URL = 1;
 	private static final int USER_NOT_FOUND = 2;
@@ -150,89 +148,105 @@ public class Verify extends HttpServlet {
 		}
 		try {
 			if ((phoneNumber != null) && (clientId != null)) {
-				String userId = getGCMessagingID(phoneNumber);
-				System.out.println("sending message to " + userId);
-				if (userId != null) {
+			    ClientData clientData = new ClientData(phoneNumber);
+				System.out.println("sending message to " + clientData.getGCMMessagingId());
 
-					// add a request with a Unique # and add it to the outstanding request list.
-					RequestSet requestSet = RequestSet.getInstance();
-					ResponseData responseData = new ResponseData();
-					requestSet.addRequest(requestId, responseData);
-					responseData.terminalIPAddress = terminalIPAddress;
-					initRequest(requestId);
-					getTerminalLocationInBackground(responseData);
+				// add a request with a Unique # and add it to the outstanding request list.
+				RequestSet requestSet = RequestSet.getInstance();
+				ResponseData responseData = new ResponseData();
+				requestSet.addRequest(requestId, responseData);
+				responseData.terminalIPAddress = terminalIPAddress;
+				initRequest(requestId);
+				getTerminalLocationInBackground(responseData);
 
-					// get this server's IP address
-					String serverAddress = url.getHost();
-					InetAddress serverInetAddress = InetAddress.getByName(url.getHost());
-					String serverIP = serverInetAddress.getHostAddress();
-					int serverPort = url.getPort();
+				// get this server's IP address
+				String serverAddress = url.getHost();
+				InetAddress serverInetAddress = InetAddress.getByName(url.getHost());
+				String serverIP = serverInetAddress.getHostAddress();
+				int serverPort = url.getPort();
 
-					// request a verification from the handset
-					verifyIPAddress(userId, siteIPAddress, maxHops, timeoutMsec, requestId, serverIP, serverPort);
+				// request a verification from the handset
+				verifyClient(clientData, siteIPAddress, maxHops, timeoutMsec, requestId, serverIP, serverPort);
 
-					// wait on the first response from the handset with the location and Connected MAC address
-					responseData = requestSet.waitOnResponse(requestId, timeoutMsec);
-					responseData.terminalTraceroute = terminalTraceroute;
-					PrintWriter out = response.getWriter();
-					out.println("longitude = " + responseData.handsetLongitude);
-					out.println("latitude = " + responseData.handsetLatitude);
-					out.println("handsetIPAddress = " + responseData.handsetIPAddress);
-					out.println("wifiMACAddress = " + responseData.wifiMACAddress);
-					out.println(String.format("terminal location %.4f %.4f", responseData.terminalLatitude, responseData.terminalLongitude));
-					if (responseData.forwardTraceroute != null) {
-						out.println("forward traceroute");
-						for (String ip : responseData.forwardTraceroute) {
-							out.println(ip + " ");
-						}
+				// wait on the first response from the handset with the location and Connected MAC address
+				responseData = requestSet.waitOnResponse(requestId, timeoutMsec);
+				responseData.terminalTraceroute = terminalTraceroute;
+				PrintWriter out = response.getWriter();
+				out.println("longitude = " + responseData.handsetLongitude);
+				out.println("latitude = " + responseData.handsetLatitude);
+				out.println("handsetIPAddress = " + responseData.handsetIPAddress);
+				out.println("wifiMACAddress = " + responseData.wifiMACAddress);
+				out.println(String.format("terminal location %.4f %.4f", responseData.terminalLatitude, responseData.terminalLongitude));
+				if (responseData.forwardTraceroute != null) {
+					out.println("forward traceroute");
+					for (String ip : responseData.forwardTraceroute) {
+						out.println(ip + " ");
 					}
-					if (responseData.reverseTraceroute != null) {
-						out.println("reverse traceroute");
-						for (String ip : responseData.reverseTraceroute) {
-							out.println(ip + " ");
-						}
-					}
-					if (responseData.terminalTraceroute != null) {
-						out.println("forward traceroute to terminal");
-						for (String ip : responseData.terminalTraceroute) {
-							out.println(ip + " ");
-						}
-					}
-					requestSet.removeRequest(requestId);
-				} else {
-					errorCode = USER_NOT_FOUND;
 				}
+				if (responseData.reverseTraceroute != null) {
+					out.println("reverse traceroute");
+					for (String ip : responseData.reverseTraceroute) {
+						out.println(ip + " ");
+					}
+				}
+				if (responseData.terminalTraceroute != null) {
+					out.println("forward traceroute to terminal");
+					for (String ip : responseData.terminalTraceroute) {
+						out.println(ip + " ");
+					}
+				}
+				requestSet.removeRequest(requestId);
 			}
 		} catch (Exception ex) {
 		    ex.printStackTrace();
 		}
 	}
 
-	// retreive the Google Cloud Messaging ID for the user's phone number
-	private String getGCMessagingID(String phoneNumber) throws Exception {
-		String userId = null;
-		Class.forName("com.mysql.jdbc.Driver");
-		String dbConnection = String.format(Constants.DB_CONNECTION_FORMAT, Constants.sdbDatabase);
-		Connection con = DriverManager.getConnection(dbConnection, Constants.sdbUsername, Constants.sdbPassword);
-		try {
-			PreparedStatement selectStatement = con.prepareStatement(SELECT_BY_PHONE);
-			selectStatement.setString(1, phoneNumber);
-			ResultSet rs = selectStatement.executeQuery();
-			if (rs.first()) {
-				System.out.println("there is a matching record for " + phoneNumber);
-				int phoneNumberColIndex = rs.findColumn("phone_number");
-				String testPhoneNumber = rs.getString(phoneNumberColIndex);
-				int clientUserIdColIndex = rs.findColumn("client_user_id");
-				userId = rs.getString(clientUserIdColIndex);
-				System.out.println("and the user id is " + userId);
-				rs.close();
-			} else {
-				System.out.println("there was no user matching " + phoneNumber);
+	private class ClientData {
+	    private static final String SELECT_BY_PHONE = "select * from user where phone_number=?";
+		private String phoneNumber;
+		private String gcmMessagingId;
+		private String publicKey;
+
+		public ClientData(String phoneNumber) throws Exception {
+			this.phoneNumber = phoneNumber;
+			String userId = null;
+			Class.forName("com.mysql.jdbc.Driver");
+			String dbConnection = String.format(Constants.DB_CONNECTION_FORMAT, Constants.sdbDatabase);
+			Connection con = DriverManager.getConnection(dbConnection, Constants.sdbUsername, Constants.sdbPassword);
+			try {
+				PreparedStatement selectStatement = con.prepareStatement(SELECT_BY_PHONE);
+				selectStatement.setString(1, phoneNumber);
+				ResultSet rs = selectStatement.executeQuery();
+				if (rs.first()) {
+					System.out.println("there is a matching record for " + phoneNumber);
+					int phoneNumberColIndex = rs.findColumn("PHONE_NUMBER");
+					String testPhoneNumber = rs.getString(phoneNumberColIndex);
+					int clientUserIdColIndex = rs.findColumn("CLIENT_USER_ID");
+					gcmMessagingId = rs.getString(clientUserIdColIndex);
+					int publicKeyColIndex = rs.findColumn("PUBLIC_KEY");
+					publicKey = rs.getString(publicKeyColIndex);
+					System.out.println("and the user id is " + userId);
+					rs.close();
+				} else {
+					System.out.println("there was no user matching " + phoneNumber);
+				}
+			} finally {
+				con.close();
 			}
-		} finally {
-			con.close();
 		}
-		return userId;
+
+		public String getPhoneNumber() {
+			return phoneNumber;
+		}
+
+		public String getPublicKey() {
+			return publicKey;
+		}
+
+		public String getGCMMessagingId() {
+			return gcmMessagingId;
+		}
 	}
 
 	// initialize the request by storing the request ID and the timestamp.
@@ -275,21 +289,20 @@ public class Verify extends HttpServlet {
 	 * requestId requestID unique identifier, so we can associate the response from the handset.
 	 * requestIp Address of this servlet to send the response to.
 	 */
-	public static void verifyIPAddress(final String toRegId, 
+	public static void verifyClient(ClientData clientData,
 				   final String destIpAddress, 
 				   final int maxHops, 
 				   int timeoutMsec, 
 				   final String requestId,
 				   final String requestIp,
 				   final int requestPort) {
-			System.out.println("sending message to " + toRegId);
-			final String senderId = "1012198772634"; // your GCM sender id
-			final String password = "AIzaSyDUuok4W2TqMR9vKmkQd66Fm9j3SYxhHQo";
+			System.out.println("sending message to " + clientData.getGCMMessagingId());
 			mVerificationResult = null;
 			try {
+				String token = CipherUtil.getEncryptedToken(clientData.getPublicKey());
 				SmackCcsClient ccsClient = new SmackCcsClient();
 
-				ccsClient.connect(Constants.sGCMProjectId, Constants.sGCMApiKey);
+				ccsClient.connect(Constants.sGCMProjectId, Constants.sGCMApiKey, Constants.sGCMServer, Constants.sGCMPort);
 
 				// Send a sample hello downstream message to a device.
 				String messageId = ccsClient.nextMessageId();
@@ -302,9 +315,10 @@ public class Verify extends HttpServlet {
 				payload.put("requestIp", requestIp);
 				payload.put("requestPort", Integer.toString(requestPort));
 				payload.put("delivery_receipt_requested", "true");
+				payload.put("token", token);
 				String collapseKey = "sample";
 				Long timeToLive = 20000L;
-				String message = createGCMMessage(toRegId, messageId, payload, collapseKey, timeToLive, true);
+				String message = createGCMMessage(clientData.getGCMMessagingId(), messageId, payload, collapseKey, timeToLive, true);
 				System.out.println("sending " + message);
 				ccsClient.sendDownstreamMessage(message);
 			} catch (Exception ex) {

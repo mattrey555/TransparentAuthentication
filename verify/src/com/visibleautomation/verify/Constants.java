@@ -19,7 +19,7 @@ public class Constants {
     private static final String GCM_PROJECTID_PROPERTY = "gcm.projectid";
     private static final String GCM_APIKEY_PROPERTY = "gcm.apikey";
     public static String sGCMServer = null;
-    public static String sGCMPort = null;
+    public static int sGCMPort = 0;
     public static String sGCMProjectId = null;
     public static String sGCMApiKey = null;
 
@@ -60,7 +60,7 @@ public class Constants {
             if (is != null) {
                 gcmProperties.load(is);
                 sGCMServer = gcmProperties.getProperty(GCM_SERVER_PROPERTY);
-                sGCMPort = gcmProperties.getProperty(GCM_PORT_PROPERTY);
+                sGCMPort = Integer.parseInt(gcmProperties.getProperty(GCM_PORT_PROPERTY));
                 sGCMProjectId = gcmProperties.getProperty(GCM_PROJECTID_PROPERTY);
                 sGCMApiKey = gcmProperties.getProperty(GCM_APIKEY_PROPERTY);
                 System.out.println("Verify: gcm.properties file loaded successfully server = " + 

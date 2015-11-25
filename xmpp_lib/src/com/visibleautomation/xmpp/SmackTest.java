@@ -39,13 +39,16 @@ public class SmackTest {
      private static final String YOUR_API_KEY = "AIzaSyDUuok4W2TqMR9vKmkQd66Fm9j3SYxhHQo";
      private static final String YOUR_PROJECT_ID = "1012198772634";
      private static final String YOUR_PHONE_REG_ID = "APA91bFD5cQ-6Byhk5ZyXCnICB6D4zbmzFBifhiIHZTxYqqEGtuzX2q8eNJFxzjBZpwQRf-maLGRK9L5yvv3_y07lo0Bue6-nEElYeHhq9aelzSvS5xdV6_5nkrNFKfSFZ-MIrJIp97y-6AEG5VSexfa2TUtUcOiRz4Hns-6Vky9NgAFc5x4oQs";
+    private static final String GCM_SERVER = "gcm-preprod.googleapis.com";
+    private static final int GCM_PORT = 5236;
+
     
 
     public static void main(String[] args) throws Exception {
         
         SmackCcsClient ccsClient = new SmackCcsClient();
 
-        ccsClient.connect(YOUR_PROJECT_ID, YOUR_API_KEY);
+        ccsClient.connect(YOUR_PROJECT_ID, YOUR_API_KEY, GCM_SERVER, GCM_PORT);
         
         // Send a sample hello downstream message to a device.
         String messageId = ccsClient.nextMessageId();

@@ -17,7 +17,7 @@ import java.util.Base64;
  * Servlet to process the verification request from login
  */
 public class CipherUtil {
-	public String getEncryptedToken(String publicKeyString) throws Exception {
+	public static String getEncryptedToken(String publicKeyString) throws Exception {
 		// generate and encode a random number to send to the client, which it will decrypt with
 		// its private key, then request a verification from the handset.
 		Random random = new Random();

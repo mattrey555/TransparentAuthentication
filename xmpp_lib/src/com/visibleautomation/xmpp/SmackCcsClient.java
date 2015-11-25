@@ -44,12 +44,9 @@ import javax.net.ssl.SSLSocketFactory;
  */
 public class SmackCcsClient {
 
-    //private static final String GCM_SERVER = "gcm.googleapis.com";
-    private static final String GCM_SERVER = "gcm-preprod.googleapis.com";
-    private static final int GCM_PORT = 5236;
-
     private static final String GCM_ELEMENT_NAME = "gcm";
     private static final String GCM_NAMESPACE = "google:mobile:data";
+	// temporary for stanza debugging
     private static final String YOUR_PROJECT_ID = "1012198772634";
     
     static {
@@ -215,15 +212,15 @@ public class SmackCcsClient {
      * @param senderId Your GCM project number
      * @param apiKey API Key of your project
      */
-    public void connect(String senderId, String apiKey)
+    public void connect(String senderId, String apiKey, String gcmServer, int gcmPort)
             throws XMPPException, IOException, SmackException, InterruptedException {
 	System.out.println("senderId = " + senderId + " apiKey = " + apiKey);
     	XMPPTCPConnectionConfiguration config =
     			XMPPTCPConnectionConfiguration.builder()
-    		     .setHost(GCM_SERVER)
-				 .setServiceName(GCM_SERVER)
+    		     .setHost(gcmServer)
+				 .setServiceName(gcmServer)
     		     .setCompressionEnabled(false)
-    		     .setPort(GCM_PORT)
+    		     .setPort(gcmPort)
 			     .setUsernameAndPassword(senderId, apiKey) 
     		     .setConnectTimeout(30000)
 				 .setDebuggerEnabled(true)
