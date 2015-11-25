@@ -23,6 +23,7 @@ import java.io.PrintWriter;
 import java.io.OutputStreamWriter;
 import java.io.BufferedWriter;
 import java.util.List;
+import java.util.Properties;
 import com.visibleautomation.util.StringUtil;
 import com.visibleautomation.util.ProcessUtil;
 
@@ -41,12 +42,56 @@ public class ProcessLoginServlet extends HttpServlet {
 	private static final int CLIENT_ID = 1;
 	private static final int MAX_HOPS = 20;
 	private static final int TIMEOUT_MSEC = 20000;
+	private static final String SQL_PROPERTIES_FILE = "sql.properties";
+	private static final String SQL_USERNAME_PROPERTY = "sql.username";
+	private static final String SQL_PASSWORD_PROPERTY = "sql.password";
+	private static final String SQL_DATABASE_PROPERTY = "sql.database";
+	private static final String URL_PARAM_USERNAME = "username";
+	private static final String URL_PARAM_PASSWORD = "password";
+
+    private static String sdbUsername = null;
+	private static String sdbPassword = null;
+	private static String sdbDatabase = null;
+	
+	static {
+		System.out.println("ProcessLoginServlet: static initialization for sql.properties");
+		Properties sqlProperties = new Properties();
+	    InputStream is = null;
+		try {
+			is = ProcessLoginServlet.class.getClassLoader().getResourceAsStream(SQL_PROPERTIES_FILE);
+			if (is != null) {
+				sqlProperties.load(is);
+				sdbUsername = sqlProperties.getProperty(SQL_USERNAME_PROPERTY);
+				sdbPassword = sqlProperties.getProperty(SQL_PASSWORD_PROPERTY);
+				sdbDatabase = sqlProperties.getProperty(SQL_DATABASE_PROPERTY);
+				System.out.println("ProcessLoginServlet: sql.properties file loaded successfully username = " + 
+								   sdbUsername + " password = " + sdbPassword + " database = " + sdbDatabase);
+			} else {
+				System.out.println("failed to load " + SQL_PROPERTIES_FILE);
+			}
+		} catch (IOException ioex) {
+			System.out.println("ProcessLoginServlet: failed to load properties file " + SQL_PROPERTIES_FILE + "message = " + ioex.getMessage());
+		} catch (Exception ex) {
+			System.out.println("ProcessLoginServlet: failed to load properties file " + SQL_PROPERTIES_FILE + "message = " + ex.getMessage());
+		} finally {
+			try {
+				if (is != null) {
+					is.close();
+				}
+			} catch (IOException ioex) {
+			}
+		}
+	}
+
+    public ProcessLoginServlet() {
+		System.out.println("ProcessLoginServlet: constructor  called");
+    }
 
 	public void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, java.io.IOException {
 
 		try {	    
-			String username  = request.getParameter("username");
-			String password  = request.getParameter("password");
+			String username  = request.getParameter(URL_PARAM_USERNAME);
+			String password  = request.getParameter(URL_PARAM_PASSWORD);
 			System.out.println("username = " + username + " password = " + password);
 			String userId = verifyLogin(username, password);
 			if (userId == null) {
@@ -96,9 +141,10 @@ public class ProcessLoginServlet extends HttpServlet {
 	// given the username and password from the UI, return the userID if it exists, or null if it doesn't
 
    private String verifyLogin(String username, String password) throws Exception {
+		Class.forName("com.mysql.jdbc.Driver");
         String userId = null;
-        Class.forName("com.mysql.jdbc.Driver");
-        Connection con = DriverManager.getConnection(Constants.DB_CONNECTION, SQL_USER, SQL_PASSWORD);
+		String dbConnection = String.format(Constants.DB_CONNECTION, sdbDatabase);
+        Connection con = DriverManager.getConnection(dbConnection, sdbUsername, sdbPassword);
         try {
             PreparedStatement selectStatement = con.prepareStatement(SELECT_USERNAME_PASSWORD);
             selectStatement.setString(1, username);

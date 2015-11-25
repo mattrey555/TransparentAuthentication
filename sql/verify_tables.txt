@@ -1,0 +1,14 @@
+create user 'verify@localhost' identified by 'FiatX1/9'; 
+GRANT ALL PRIVILEGES ON *.* TO 'verify@localhost';
+create user 'verify' identified by 'FiatX1/9'; 
+GRANT ALL PRIVILEGES ON *.* TO 'verify';
+create database verify
+use database verify;
+create table client (ID INT NOT NULL PRIMARY KEY, CLIENT_ID VARCHAR(512) NOT NULL, CLIENT_USER_ID VARCHAR(512) NOT NULL);
+create table user (ID INT NOT NULL PRIMARY KEY, CLIENT_USER_ID VARCHAR(512) NOT NULL, USER_ID VARCHAR(512) NOT NULL, PHONE_NUMBER VARCHAR(512) NOT NULL);
+create table request (REQUEST_ID VARCHAR(512) NOT NULL PRIMARY KEY, REQUST_TOKEN VARCHAR(128),REQUEST_TIMESTAMP BIGINT NOT NULL);
+create index client_client_id on client(client_id);
+create index client_phone_number on client(phone_number);
+create index client_client_user_id on client(client_user_id);
+create index user_client_user_id on user(client_user_id);
+create index request_request_id on request(request_id);

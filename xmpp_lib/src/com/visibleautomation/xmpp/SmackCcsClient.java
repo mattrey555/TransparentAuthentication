@@ -224,7 +224,6 @@ public class SmackCcsClient {
 				 .setServiceName(GCM_SERVER)
     		     .setCompressionEnabled(false)
     		     .setPort(GCM_PORT)
-			     //.setUsernameAndPassword(senderId + "@gcm.googleapis.com", apiKey) 
 			     .setUsernameAndPassword(senderId, apiKey) 
     		     .setConnectTimeout(30000)
 				 .setDebuggerEnabled(true)
@@ -242,7 +241,6 @@ public class SmackCcsClient {
 
         System.out.println("Connecting...");
 		connection.setPacketReplyTimeout(10000);
-		//SASLAuthentication.supportSASLMechanism("PLAIN", 0);
         connection.connect();
 
         connection.addConnectionListener(new LoggingConnectionListener());
@@ -400,43 +398,4 @@ public class SmackCcsClient {
 			
 		}
     }
-
-	private static class FixedXMPPTCPConnection extends XMPPTCPConnection {
-		private String authenticationId;
-		private String password;
-
-		public FixedXMPPTCPConnection(XMPPTCPConnectionConfiguration config, String authenticationId, String password) {
-			super(config);
-			this.authenticationId = authenticationId;
-			this.password = password;
-		}
-	 
-		@Override
-        public void send(PlainStreamElement auth) throws NotConnectedException
-        {
-            if(auth instanceof AuthMechanism)
-            {           
-                final XmlStringBuilder xml = new XmlStringBuilder();
-                xml.halfOpenElement(AuthMechanism.ELEMENT)
-                .xmlnsAttribute(SaslStreamElements.NAMESPACE)
-                .attribute("mechanism", "X-OAUTH2")
-                .attribute("auth:service", "oauth2")
-                .attribute("xmlns:auth", "http://www.google.com/gcm/protocol/auth")
-                .rightAngleBracket()
-                .optAppend(Base64.encodeToString(StringUtils.toBytes("\0" + authenticationId + "\0" + password)))
-                .closeElement(AuthMechanism.ELEMENT);                   
-                 super.send(new PlainStreamElement()
-                 {
-                    @Override
-                    public String toXML()
-                    {
-						System.out.println("xml sent: " + xml.toString());
-                        return xml.toString();
-                    }                        
-                 });                 
-            } else {
-				super.send(auth);
-			}
-        }
-	}
 }

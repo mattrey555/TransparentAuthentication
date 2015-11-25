@@ -15,16 +15,27 @@
 	 	<pathelement location="${jetty-lib}/servlet-api-${servlet-version}.jar" />
 	 	<pathelement location="${jetty-lib}/jetty-server-${jetty-version}.jar" />
 	 	<pathelement location="${jetty-lib}/jetty-util-${jetty-version}.jar" />
-	    <pathelement location="${lib}/mysql-connector-java-5.1.34-bin.jar" />
-	    <pathelement location="${lib}/smack-tcp-4.0.7.jar" />
-		<pathelement location="${lib}/smack-core-4.0.7.jar" />
+	    <pathelement location="${lib}/mysql-connector-java-${mysql-version}-bin.jar" />
+	    <pathelement location="${lib}/smack-tcp-${smack-version}.jar" />
+		<pathelement location="${lib}/smack-core-${smack-version}.jar" />
+		<pathelement location="${lib}/smack-im-${smack-version}.jar" />
+		<pathelement location="${lib}/smack-java7-${smack-version}.jar" />
+		<pathelement location="${lib}/smack-sasl-provided-${smack-version}.jar" />
 		<pathelement location="${lib}/xpp3-1.1.4c.jar" />
 		<pathelement location="${lib}/org.json-20130603.jar" />
 	    <pathelement location="${lib}/json-simple-1.1.1.jar" />
 		<pathelement location="${lib}/xmpp_lib.jar" />
 	    <pathelement location="${lib}/tmfa_util.jar" />
     </path>
-	<target name="war" depends="compile">
+	<target name="copy-properties">
+		<copy todir="${classes-directory}">
+			<fileset dir="${src}">
+				<exclude name="**/*.java"/>
+			</fileset>
+		</copy>
+	</target>
+
+	<target name="war" depends="compile, copy-properties">
 		<mkdir dir="${build-directory}" />
 		<delete file="${build-directory}/${war-file-name}" />
 		<war destfile="${build-directory}/${war-file-name}" webxml="${web-xml-file}"> 
@@ -56,7 +67,7 @@
 		    	classpathref="compile.classpath" />
   	</target>
 
-	<target name="deploy" depends="war" description="deploy the war file to jetty" >
+	<target name="deploy" description="deploy the war file to jetty" >
 	    <copy file="${build-directory}/${war-file-name}" todir="${jetty-home}/webapps" />
 	</target>
        <target name="clean" description="clean the sources" >

@@ -19,10 +19,10 @@
 	 	<pathelement location="${jetty-lib}/servlet-api-3.1.jar" />
 	 	<pathelement location="${jetty-lib}/jetty-server-${jetty-version}.jar" />
 	 	<pathelement location="${jetty-lib}/jetty-util-${jetty-version}.jar" />
-	    <pathelement location="${jetty-ext}/mysql-connector-java-5.1.34-bin.jar" />
-	    <pathelement location="${jetty-jsp}/org.mortbay.jasper.apache-jsp-8.0.9.M3.jar" />
-	    <pathelement location="${jetty-jsp}/org.mortbay.jasper.apache-el-8.0.9.M3.jar" />
-		<pathelement location="${lib}/tmfa_util.jar" />
+	    <pathelement location="${jetty-lib}/mysql-connector-java-${mysql-version}-bin.jar" />
+	    <pathelement location="${jetty-jsp}/org.mortbay.jasper.apache-jsp-${jsp-version}.jar" />
+	    <pathelement location="${jetty-jsp}/org.mortbay.jasper.apache-el-${jsp-version}.jar" />
+		<pathelement location="${jetty-lib}/tmfa_util.jar" />
     </path>
 	<tstamp prefix="build-info">
 		<format property="current-date" pattern="d-MMMM-yyyy" locale="en" />
@@ -30,8 +30,27 @@
 		<format property="year-month-day" pattern="yyyy-MM-dd" locale="en" />
 	</tstamp>
 
-	<target name="war" depends="compile-jspc,compile-servlets">
+    <target name="clean">
+		<delete dir="${build-directory}" />
+		<delete dir="${classes-directory}" />
+	</target>
+
+
+    <target name="mkdirs">
 		<mkdir dir="${build-directory}" />
+		<mkdir dir="${classes-directory}" />
+	</target>
+
+    <target name="copy-properties">
+        <copy todir="${classes-directory}">
+            <fileset dir="${src}">
+                <exclude name="**/*.java"/>
+            </fileset>  
+        </copy> 
+    </target>
+
+
+	<target name="war" depends="mkdirs,compile-jspc,compile-servlets,copy-properties">
 		<delete file="${build-directory}/${war-file-name}" />
 		<war destfile="${build-directory}/${war-file-name}" webxml="${web-xml-file}"> 
 			<classes dir="${classes-directory}" />
@@ -79,14 +98,14 @@
 	    	package="${package-name}.${webapp-name}"
             uriroot="${web-dir}"
             addWebXmlMappings="true"
-            webXmlFragment="${build-directory}/generated_web.xml"
+	    	webXmlFragment="${build-directory}/generated_web.xml"
             compilerSourceVM="{java-version}"
             compilerTargetVM="{java-version}"
             outputDir="build/gen-src"
             verbose="9" />
     </target>
 
-	<target name="deploy" depends="war" description="deploy the war file to jetty" >
+	<target name="deploy" description="deploy the war file to jetty" >
 	    <copy file="${build-directory}/${war-file-name}" todir="${jetty-home}/webapps" />
 	</target>
 </project>

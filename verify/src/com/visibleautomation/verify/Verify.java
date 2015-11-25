@@ -33,15 +33,28 @@ import org.xmlpull.v1.XmlPullParser;
 import com.visibleautomation.util.ServletUtil;
 import com.visibleautomation.util.StreamUtil;
 
+/**
+ * Servlet which receives verification request from the third-party server.
+ */
 public class Verify extends HttpServlet {
+	// phone number used as a unique identifier, which is associated with the GCM client ID in the database
 	private static final String PHONE_NUMBER = "phoneNumber"; 
+
+	// third-party client ID
 	private static final String CLIENT_ID = "clientId"; 
+
+	// max # of hops to request in reverse traceroute
 	private static final String MAX_HOPS = "maxHops"; 
+
+	// third-party site address
 	private static final String SITE_IPADDRESS = "siteIPAddress"; 
+
+	// IP address of accessing terminal
 	private static final String TERMINAL_IPADDRESS = "terminalIPAddress"; 
+
+	// timeout to connect to clinet
 	private static final String TIMEOUT_MSEC = "timeoutMsec"; 
-	private static final String REGISTRATION_ID = "registration_id";
-	private static final String REQUEST_TABLE = "request";
+
 	private static final String SQL_USER = "verify";
 	private static final String SQL_PASSWORD = "FiatX1/9";
 	private static final int SUCCESS = 0;
@@ -49,11 +62,14 @@ public class Verify extends HttpServlet {
 	private static final int USER_NOT_FOUND = 2;
 	private static final int DATABASE_CONNECTION_FAILED = 2;
 	private static final int POLL_MSEC = 100;
-    private static final String SELECT_BY_PHONE = "select * from user where phone_number=?";
+	private static final String SELECT_BY_PHONE = "select * from user where phone_number=?";
 	private static final String INSERT_REQUEST_ID = "INSERT INTO request (request_id, request_timestamp) VALUES (?, ?)"; 
 	private static final String REQUEST_IP_LOCATION = "http://ipinfo.io/%s/json";
 	private static String mVerificationResult;
 
+	static {
+		System.out.println("static initializer");
+	}
 
 	public Verify() {
 		System.out.println("constructor is called");
@@ -64,6 +80,7 @@ public class Verify extends HttpServlet {
       	System.out.println("init is getting called");
 	}
 
+	@Override
 	public void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
       	// Set response content type
       	String urlStr = request.getRequestURL().toString();
@@ -262,7 +279,7 @@ public class Verify extends HttpServlet {
 				   final String requestIp,
 				   final int requestPort) {
 			System.out.println("sending message to " + toRegId);
-			final long senderId = 1012198772634L; // your GCM sender id
+			final String senderId = "1012198772634"; // your GCM sender id
 			final String password = "AIzaSyDUuok4W2TqMR9vKmkQd66Fm9j3SYxhHQo";
 			mVerificationResult = null;
 			try {
