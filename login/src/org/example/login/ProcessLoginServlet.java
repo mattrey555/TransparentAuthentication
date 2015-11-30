@@ -31,56 +31,19 @@ import com.visibleautomation.util.ProcessUtil;
  * Servlet implementation to process the login and request verification from the handset
  */
 public class ProcessLoginServlet extends HttpServlet {
-	private static final String SQL_USER = "third_party";
-	private static final String SQL_PASSWORD = "FiatX1/9";
 	private static final String SELECT_USERNAME_PASSWORD = "SELECT * FROM USER WHERE USER_ID=? AND PWD=?";
-	private static final String VERIFY_URL_FORMAT = "http://104.154.58.18:8080/verify/verify?phoneNumber=%s&terminalIPAddress=%s&siteIPAddress=%s&clientId=%d&maxHops=%d&timeoutMsec=%d";
+	private static final String VERIFY_URL_FORMAT = "http://%s/verify/verify?phoneNumber=%s&terminalIPAddress=%s&siteIPAddress=%s&clientId=%d&maxHops=%d&timeoutMsec=%d";
 	private static final String IP_REGEXP = "\"[0-9]*\\.[0-9]*\\.[0-9]*\\.[0-9]*\"";
 	private static final String TRACEROUTE_CMD = "traceroute -n --module=udp --queries=1 %s -w 0.25 --back | grep -v \"\\*\" | grep -o " + IP_REGEXP;
 	private static final String JSON_TAG_TERMINAL_IP_ADDRESS = "terminalIPAddress";
 	private static final String JSON_TAG_TRACEROUTE = "traceroute";
-	private static final int CLIENT_ID = 1;
-	private static final int MAX_HOPS = 20;
-	private static final int TIMEOUT_MSEC = 20000;
-	private static final String SQL_PROPERTIES_FILE = "sql.properties";
-	private static final String SQL_USERNAME_PROPERTY = "sql.username";
-	private static final String SQL_PASSWORD_PROPERTY = "sql.password";
-	private static final String SQL_DATABASE_PROPERTY = "sql.database";
-	private static final String URL_PARAM_USERNAME = "username";
-	private static final String URL_PARAM_PASSWORD = "password";
-
-    private static String sdbUsername = null;
-	private static String sdbPassword = null;
-	private static String sdbDatabase = null;
+   	private static final String URL_PARAM_USERNAME = "username";
+    	private static final String URL_PARAM_PASSWORD = "password";
 	
 	static {
 		System.out.println("ProcessLoginServlet: static initialization for sql.properties");
-		Properties sqlProperties = new Properties();
-	    InputStream is = null;
-		try {
-			is = ProcessLoginServlet.class.getClassLoader().getResourceAsStream(SQL_PROPERTIES_FILE);
-			if (is != null) {
-				sqlProperties.load(is);
-				sdbUsername = sqlProperties.getProperty(SQL_USERNAME_PROPERTY);
-				sdbPassword = sqlProperties.getProperty(SQL_PASSWORD_PROPERTY);
-				sdbDatabase = sqlProperties.getProperty(SQL_DATABASE_PROPERTY);
-				System.out.println("ProcessLoginServlet: sql.properties file loaded successfully username = " + 
-								   sdbUsername + " password = " + sdbPassword + " database = " + sdbDatabase);
-			} else {
-				System.out.println("failed to load " + SQL_PROPERTIES_FILE);
-			}
-		} catch (IOException ioex) {
-			System.out.println("ProcessLoginServlet: failed to load properties file " + SQL_PROPERTIES_FILE + "message = " + ioex.getMessage());
-		} catch (Exception ex) {
-			System.out.println("ProcessLoginServlet: failed to load properties file " + SQL_PROPERTIES_FILE + "message = " + ex.getMessage());
-		} finally {
-			try {
-				if (is != null) {
-					is.close();
-				}
-			} catch (IOException ioex) {
-			}
-		}
+		Constants.setDatabaseVariables();
+		Constants.setNetworkVariables();
 	}
 
     public ProcessLoginServlet() {
@@ -93,8 +56,8 @@ public class ProcessLoginServlet extends HttpServlet {
 			String username  = request.getParameter(URL_PARAM_USERNAME);
 			String password  = request.getParameter(URL_PARAM_PASSWORD);
 			System.out.println("username = " + username + " password = " + password);
-			String userId = verifyLogin(username, password);
-			if (userId == null) {
+			String phoneNumber = verifyLogin(username, password);
+			if (phoneNumber == null) {
 				response.sendRedirect("login_failed.jsp");
 			} else {
 				
@@ -112,7 +75,9 @@ public class ProcessLoginServlet extends HttpServlet {
 				// TODO: the first request should send the terminal IP, site IP, user ID with a unique ID
 				// the second request should send the traceroute, so we don't have to wait for this traceroute
 				// before getting the others.
-				String verifyURLStr = String.format(VERIFY_URL_FORMAT, userId, terminalIPAddress, siteIPAddress, CLIENT_ID, MAX_HOPS, TIMEOUT_MSEC);
+				String verifyURLStr = String.format(VERIFY_URL_FORMAT, Constants.getVerifyAddress(), phoneNumber, terminalIPAddress, 
+												    siteIPAddress, Constants.getClientId(), 
+												    Constants.getMaxHops(), Constants.getTimeoutMsec());
 				URL verifyURL = new URL(verifyURLStr);
 				HttpURLConnection verifyServletConnection = (HttpURLConnection) verifyURL.openConnection();
 				verifyServletConnection.setRequestMethod("POST");
@@ -124,7 +89,7 @@ public class ProcessLoginServlet extends HttpServlet {
 				bw.flush();
 				verifyServletConnection.getOutputStream().close();
 
-				System.out.println("user id = " + userId);
+				System.out.println("phone number = " + phoneNumber);
 				InputStream is = verifyServletConnection.getInputStream();
           		BufferedReader br = new BufferedReader(new InputStreamReader(verifyServletConnection.getInputStream()));
 				PrintWriter out = response.getWriter();
@@ -142,9 +107,9 @@ public class ProcessLoginServlet extends HttpServlet {
 
    private String verifyLogin(String username, String password) throws Exception {
 		Class.forName("com.mysql.jdbc.Driver");
-        String userId = null;
-		String dbConnection = String.format(Constants.DB_CONNECTION, sdbDatabase);
-        Connection con = DriverManager.getConnection(dbConnection, sdbUsername, sdbPassword);
+        String phoneNumber = null;
+		String dbConnection = String.format(Constants.DB_CONNECTION, Constants.getDBDatabase());
+        Connection con = DriverManager.getConnection(dbConnection, Constants.getDBUsername(), Constants.getDBPassword());
         try {
             PreparedStatement selectStatement = con.prepareStatement(SELECT_USERNAME_PASSWORD);
             selectStatement.setString(1, username);
@@ -152,11 +117,11 @@ public class ProcessLoginServlet extends HttpServlet {
 			System.out.println("select statement = " + selectStatement.toString());
             ResultSet rs = selectStatement.executeQuery();
             if (rs.first()) {
-                int clientUserIdColIndex = rs.findColumn("CLIENT_USER_ID");
-                userId = rs.getString(clientUserIdColIndex);
-                System.out.println("and the user id is " + userId);
+                int clientUserIdColIndex = rs.findColumn("PHONE_NUMBER");
+                phoneNumber = rs.getString(clientUserIdColIndex);
+                System.out.println("and the phone number is " + phoneNumber);
                 rs.close();
-				return userId;
+				return phoneNumber;
             } 
         } finally {
             con.close();
@@ -183,5 +148,4 @@ public class ProcessLoginServlet extends HttpServlet {
 		sbJSON.append("]}");
 		return sbJSON.toString();
 	}
-															    
 }
