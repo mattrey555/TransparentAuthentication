@@ -17,7 +17,24 @@ import java.util.Base64;
  * Servlet to process the verification request from login
  */
 public class CipherUtil {
-	public static String getEncryptedToken(String publicKeyString) throws Exception {
+	public static class Token {
+		private final long token;
+	    private final String encryptedToken;
+
+		public Token(long token, String encryptedToken) {
+			this.token = token;
+			this.encryptedToken = encryptedToken;
+		}
+
+		public long getToken() {
+			return this.token;
+		}
+
+		public String getEncryptedToken() {
+			return this.encryptedToken;
+		}
+    }
+	public static Token getEncryptedToken(String publicKeyString) throws Exception {
 		// generate and encode a random number to send to the client, which it will decrypt with
 		// its private key, then request a verification from the handset.
 		Random random = new Random();
@@ -34,6 +51,6 @@ public class CipherUtil {
 		cipherOutputStream.close();
 		byte[] encryptedBytes = outputStream.toByteArray();
 		encryptedToken = Base64.getEncoder().encodeToString(encryptedBytes);
-	    return encryptedToken;
+	    return new Token(randVal, encryptedToken);
 	}
 } 

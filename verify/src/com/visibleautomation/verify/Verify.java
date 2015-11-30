@@ -11,6 +11,7 @@ import java.util.UUID;
 import java.util.Date;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Random;
 import java.lang.Thread;
 import java.lang.Runnable;
 import java.net.InetAddress;
@@ -30,6 +31,10 @@ import com.visibleautomation.xmpp.SmackCcsClient;
 import org.json.simple.JSONValue;
 import org.json.simple.parser.ParseException;
 import org.xmlpull.v1.XmlPullParser;
+import org.jivesoftware.smack.packet.Stanza;
+import org.jivesoftware.smack.filter.StanzaFilter;
+import org.jivesoftware.smack.packet.Message;
+import org.jivesoftware.smack.StanzaListener;
 import com.visibleautomation.util.ServletUtil;
 import com.visibleautomation.util.StreamUtil;
 
@@ -61,9 +66,12 @@ public class Verify extends HttpServlet {
 	private static final int DATABASE_CONNECTION_FAILED = 2;
 	private static final int POLL_MSEC = 100;
 	private static final String SELECT_BY_PHONE = "select * from user where phone_number=?";
-	private static final String INSERT_REQUEST_ID = "INSERT INTO request (request_id, request_timestamp) VALUES (?, ?)"; 
+	private static final String INSERT_REQUEST_ID = "INSERT INTO request (request_id, message_id, request_timestamp, request_token) VALUES (?, ?, ?, ?)"; 
 	private static final String REQUEST_IP_LOCATION = "http://ipinfo.io/%s/json";
 	private static String mVerificationResult;
+	private static SmackCcsClient.XMPPRunnable mXMPPRunnable;
+    private static SmackCcsClient mCcsClient = new SmackCcsClient();
+    private static boolean mCcsClientConnected = false;
 
     static {
         System.out.println("Verify: static initialization for sql.properties");
@@ -129,6 +137,9 @@ public class Verify extends HttpServlet {
 			errorCode = BAD_URL;
 		}
 		String requestId = UUID.randomUUID().toString();
+        Random random = new Random();
+        long messageId = random.nextLong();
+ 
 		System.out.println("parameters parsed");
 		System.out.println("phoneNumber = " + phoneNumber);
 		System.out.println("clientId = " + clientId);
@@ -137,6 +148,7 @@ public class Verify extends HttpServlet {
 		System.out.println("maxHops = " + maxHops);
 		System.out.println("timeoutMsec = " + timeoutMsec);
 		System.out.println("requestId = " + requestId);
+		System.out.println("messageId = " + messageId);
         String postData = ServletUtil.readPostData(request);
         System.out.println("post data = " + postData);
 		JSONObject jsonObject = new JSONObject(postData);
@@ -156,7 +168,6 @@ public class Verify extends HttpServlet {
 				ResponseData responseData = new ResponseData();
 				requestSet.addRequest(requestId, responseData);
 				responseData.terminalIPAddress = terminalIPAddress;
-				initRequest(requestId);
 				getTerminalLocationInBackground(responseData);
 
 				// get this server's IP address
@@ -166,7 +177,7 @@ public class Verify extends HttpServlet {
 				int serverPort = url.getPort();
 
 				// request a verification from the handset
-				verifyClient(clientData, siteIPAddress, maxHops, timeoutMsec, requestId, serverIP, serverPort);
+				verifyClient(clientData, siteIPAddress, maxHops, timeoutMsec, requestId, messageId, serverIP, serverPort);
 
 				// wait on the first response from the handset with the location and Connected MAC address
 				responseData = requestSet.waitOnResponse(requestId, timeoutMsec);
@@ -202,6 +213,9 @@ public class Verify extends HttpServlet {
 		}
 	}
 
+
+
+	// subclass containing the phone number, messaging ID, and public key for a specific client.
 	private class ClientData {
 	    private static final String SELECT_BY_PHONE = "select * from user where phone_number=?";
 		private String phoneNumber;
@@ -222,7 +236,7 @@ public class Verify extends HttpServlet {
 					System.out.println("there is a matching record for " + phoneNumber);
 					int phoneNumberColIndex = rs.findColumn("PHONE_NUMBER");
 					String testPhoneNumber = rs.getString(phoneNumberColIndex);
-					int clientUserIdColIndex = rs.findColumn("CLIENT_USER_ID");
+					int clientUserIdColIndex = rs.findColumn("USER_ID");
 					gcmMessagingId = rs.getString(clientUserIdColIndex);
 					int publicKeyColIndex = rs.findColumn("PUBLIC_KEY");
 					publicKey = rs.getString(publicKeyColIndex);
@@ -249,8 +263,9 @@ public class Verify extends HttpServlet {
 		}
 	}
 
+
 	// initialize the request by storing the request ID and the timestamp.
-	public void initRequest(String requestId) throws Exception {
+	public static void initRequest(String requestId, long messageId, long token) throws Exception {
 		long timestamp = new Date().getTime();
 		Class.forName("com.mysql.jdbc.Driver");
 		String dbConnection = String.format(Constants.DB_CONNECTION_FORMAT, Constants.sdbDatabase);
@@ -258,7 +273,9 @@ public class Verify extends HttpServlet {
 		try {
 			PreparedStatement insertStatement = con.prepareStatement(INSERT_REQUEST_ID);
 			insertStatement.setString(1, requestId);
-			insertStatement.setLong(2, timestamp);
+			insertStatement.setLong(2, messageId);
+			insertStatement.setLong(3, timestamp);
+			insertStatement.setLong(4, token);
 			insertStatement.execute();
 		} finally {
 			con.close();
@@ -277,8 +294,9 @@ public class Verify extends HttpServlet {
 	}
   
 	public void destroy() {
-      // do nothing.
+      	// do nothing.
 	}
+
 
 	/**
 	 * Send an XMPP Push Notification requesting a verification from the handset
@@ -287,41 +305,49 @@ public class Verify extends HttpServlet {
 	 * maxHops maximum # of hops to request on reverse traceroute
 	 * timeoutMsec response timeout
 	 * requestId requestID unique identifier, so we can associate the response from the handset.
+     * messageId unique identifier to associate response from handset (note: may be duplicate)
 	 * requestIp Address of this servlet to send the response to.
 	 */
 	public static void verifyClient(ClientData clientData,
 				   final String destIpAddress, 
 				   final int maxHops, 
-				   int timeoutMsec, 
+				   final int timeoutMsec, 
 				   final String requestId,
+				   final long messageId,
 				   final String requestIp,
 				   final int requestPort) {
-			System.out.println("sending message to " + clientData.getGCMMessagingId());
-			mVerificationResult = null;
-			try {
-				String token = CipherUtil.getEncryptedToken(clientData.getPublicKey());
-				SmackCcsClient ccsClient = new SmackCcsClient();
-
-				ccsClient.connect(Constants.sGCMProjectId, Constants.sGCMApiKey, Constants.sGCMServer, Constants.sGCMPort);
-
-				// Send a sample hello downstream message to a device.
-				String messageId = ccsClient.nextMessageId();
-				Map<String, String> payload = new HashMap<String, String>();
-				payload.put("RequestAuthorization", "Request");
-				payload.put("destIpAddress", destIpAddress);
-				payload.put("requestId", requestId);
-				payload.put("maxHops", Integer.toString(maxHops));
-				payload.put("EmbeddedMessageId", messageId);
-				payload.put("requestIp", requestIp);
-				payload.put("requestPort", Integer.toString(requestPort));
-				payload.put("delivery_receipt_requested", "true");
-				payload.put("token", token);
-				String collapseKey = "sample";
-				Long timeToLive = 20000L;
-				String message = createGCMMessage(clientData.getGCMMessagingId(), messageId, payload, collapseKey, timeToLive, true);
-				System.out.println("sending " + message);
-				ccsClient.sendDownstreamMessage(message);
-			} catch (Exception ex) {
+		System.out.println("sending message to " + clientData.getGCMMessagingId());
+		mVerificationResult = null;
+		try {
+			CipherUtil.Token token = CipherUtil.getEncryptedToken(clientData.getPublicKey());
+			synchronized(mCcsClient) {
+				if (!mCcsClientConnected) {
+					mXMPPRunnable = new SmackCcsClient.XMPPRunnable(Constants.getGCMProjectId(), Constants.getGCMApiKey(), Constants.getGCMServer(), Constants.getGCMPort());
+					Thread xmppThread = new Thread(mXMPPRunnable);
+					xmppThread.start();
+					mCcsClientConnected = true;
+				}
+			}
+			// Send a sample hello downstream message to a device.
+			String ccsMessageId = mCcsClient.nextMessageId();
+			Map<String, String> payload = new HashMap<String, String>();
+			payload.put("RequestAuthorization", "Request");
+			payload.put("destIpAddress", destIpAddress);
+			payload.put("requestId", requestId);
+			payload.put("messageId", ccsMessageId);
+			payload.put("maxHops", Integer.toString(maxHops));
+			payload.put("embeddedMessageId", Long.toString(messageId));
+			payload.put("requestIp", requestIp);
+			payload.put("requestPort", Integer.toString(requestPort));
+			payload.put("delivery_receipt_requested", "true");
+			payload.put("token", token.getEncryptedToken());
+			String collapseKey = "sample";
+			Long timeToLive = 20000L;
+			String message = createGCMMessage(clientData.getGCMMessagingId(), ccsMessageId, payload, collapseKey, timeToLive, true);
+			System.out.println("sending " + message);
+			mXMPPRunnable.getCcsClient().sendDownstreamMessage(message);
+			initRequest(requestId, messageId, token.getToken());
+		} catch (Exception ex) {
 			ex.printStackTrace();
 		}
 	}
@@ -339,8 +365,8 @@ public class Verify extends HttpServlet {
      * @return JSON encoded GCM message.
      */
     public static String createGCMMessage(String to, String messageId,
-					  Map<String, String> payload, String collapseKey, Long timeToLive,
-					  Boolean delayWhileIdle) {
+										  Map<String, String> payload, String collapseKey, Long timeToLive,
+										  Boolean delayWhileIdle) {
         Map<String, Object> message = new HashMap<String, Object>();
         message.put("to", to);
         if (collapseKey != null) {

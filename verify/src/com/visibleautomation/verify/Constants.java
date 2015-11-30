@@ -52,6 +52,18 @@ public class Constants {
         }
     }
 
+	public static String getDBUsername() {
+		return sdbUsername;
+	}
+
+	public static String getDBPassword() {
+		return sdbPassword;
+	}
+
+	public static String getDBDatabase() {
+		return sdbDatabase;
+	}
+
     public static void setGCMVariables() {
         InputStream is = null;
         Properties gcmProperties = new Properties();
@@ -81,4 +93,20 @@ public class Constants {
             }
         }
     }
+
+	public static String getGCMServer() {
+		return sGCMServer;
+	}
+
+	public static int getGCMPort() {
+		return sGCMPort;
+	}
+
+	public static String getGCMProjectId() {
+		return sGCMProjectId;
+	}
+
+	public static String getGCMApiKey() {
+		return sGCMApiKey;
+	}
 }
