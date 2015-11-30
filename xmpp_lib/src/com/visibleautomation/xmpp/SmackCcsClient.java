@@ -40,12 +40,11 @@ import javax.net.ssl.SSLSocketFactory;
  * Sample Smack implementation of a client for GCM Cloud Connection Server. This
  * code can be run as a standalone CCS client.
  *
- * <p>For illustration purposes only.
  */
 public class SmackCcsClient {
 
     private static final String GCM_ELEMENT_NAME = "gcm";
-    private static final String GCM_NAMESPACE = "google:mobile:data";
+    public static final String GCM_NAMESPACE = "google:mobile:data";
 	// temporary for stanza debugging
     private static final String YOUR_PROJECT_ID = "1012198772634";
     
@@ -111,18 +110,10 @@ public class SmackCcsClient {
         // PackageName of the application that sent this message.
         String category = (String) jsonObject.get("category");
         String from = (String) jsonObject.get("from");
-        @SuppressWarnings("unchecked")
-        Map<String, String> payload = (Map<String, String>) jsonObject.get("data");
-        payload.put("ECHO", "Application: " + category);
-
-        // Send an ECHO response back
-        String echo = createJsonMessage(from, nextMessageId(), payload, "echo:CollapseKey", null, false);
-        try {
-            sendDownstreamMessage(echo);
-        } catch (NotConnectedException e) {
-            System.out.println("Not connected anymore, echo message is not sent");
-        }
-        
+		System.out.println("upstream message");
+		for (String key : jsonObject.keySet()) {
+			System.out.println("received key " + key);
+		}
     }
 
     /**
@@ -208,9 +199,10 @@ public class SmackCcsClient {
 
     /**
      * Connects to GCM Cloud Connection Server using the supplied credentials.
-     *
      * @param senderId Your GCM project number
      * @param apiKey API Key of your project
+	 * @param gcmServer Google Cloud Messaging Server
+	 * @param gcmPort Google Cloud Messaging TCP port
      */
     public void connect(String senderId, String apiKey, String gcmServer, int gcmPort)
             throws XMPPException, IOException, SmackException, InterruptedException {
@@ -328,12 +320,12 @@ public class SmackCcsClient {
     /**
      * XMPP Packet Extension for GCM Cloud Connection Server.
      */
-    private static final class GcmPacketExtension extends DefaultExtensionElement   {
+    public static final class GcmPacketExtension extends DefaultExtensionElement   {
 
         private final String json;
 
         public GcmPacketExtension(String json) {
-        	super(GCM_ELEMENT_NAME, GCM_NAMESPACE);
+	    super(GCM_ELEMENT_NAME, GCM_NAMESPACE);
             this.json = json;
         }
 
@@ -355,8 +347,139 @@ public class SmackCcsClient {
         }
     }
 
-    private static final class LoggingConnectionListener
-            implements ConnectionListener {
+	public void addStanzaCallback(String key, String value, String to, GcmStanzaCallback callback, long timeoutMsec) {
+        connection.addAsyncStanzaListener(new GcmStanzaListener(key, value, callback, timeoutMsec), new GcmStanzaFilter(to));
+	}
+
+    private static class GcmStanzaFilter implements StanzaFilter {
+		private String to;
+
+		public GcmStanzaFilter(String to) {
+			this.to = to;
+		}
+
+        @Override
+        public boolean accept(Stanza arg0) {
+			System.out.println("GcmStanzaFilter called");
+            if (arg0.getClass() == Stanza.class) {
+                return true;
+            } else {
+				return (arg0.getTo()!= null) && arg0.getTo().startsWith(to);
+            }
+        }
+    }
+
+	// interface to callbacks for stanzas which match a specified key-value pair.
+	public interface GcmStanzaCallback {
+		public void run(Map<String, Object> jsonObject);
+		public void expired();
+	}
+
+	/**
+	 * Stanza listener which calls a user-supplied callback when a packet is received with a specified key-value pair
+	 */
+    private static class GcmStanzaListener implements StanzaListener {
+		private static String key;
+		private static String value;
+		private GcmStanzaCallback callback;
+		private long timeoutMsec;
+
+		/**
+		 * Constructor: Set up a stanza listener which calls callback.run() if a packet matches
+		 * the specified key/value pair, and callback.expired() if timeoutMsec has elapsed 
+		 * before the key/value pair was received.
+		 * @param key JSON tag to search for
+		 * @param value JSON value to match (not matched if null)
+		 * @param callback run() is called on match, expired() called if timeoutMsec has elapsed.
+		 * @param timeoutMsec elapsed time to wait for a match.
+		 */
+		public GcmStanzaListener(String key, String value, GcmStanzaCallback callback, long timeoutMsec) {
+			this.key = key;
+			this.value = value;
+			this.callback = callback;
+			this.timeoutMsec = timeoutMsec;
+		}
+
+        @Override
+        public void processPacket(Stanza packet) {
+            System.out.println("GcmStanzaListener Received: " + packet.toXML());
+            Message incomingMessage = (Message) packet;
+            SmackCcsClient.GcmPacketExtension gcmPacket = (SmackCcsClient.GcmPacketExtension) incomingMessage.getExtension(GCM_NAMESPACE);
+            String json = gcmPacket.getJson();
+            try {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> jsonObject = (Map<String, Object>) JSONValue.parseWithException(json);
+
+                // present for "ack"/"nack", null otherwise
+                Object messageType = jsonObject.get("message_type");
+
+                if (messageType == null) {
+                    // Normal upstream data message
+                    if (isMatchedUpstreamMessage(jsonObject)) {
+						callback.run(jsonObject);
+					}
+				}
+			} catch (ParseException e) {
+                System.out.println("Error parsing JSON " + json);
+            } catch (Exception e) {
+                System.out.println("Failed to process packet");
+            }
+		}
+
+    	protected boolean isMatchedUpstreamMessage(Map<String, Object> jsonObject) throws InterruptedException {
+        	// PackageName of the application that sent this message.
+        	System.out.println("upstream message");
+        	for (String key : jsonObject.keySet()) {
+            	System.out.println("received key = " + key + " value = " + jsonObject.get(key).toString());
+        	}
+			return jsonObject.containsKey(key) && ((value == null) || value.equals(jsonObject.get(key).toString()));
+    	}
+	}
+
+	/**
+	 * XMPPRunnable so we can receive upstream as well as downstream messages.
+	 */
+
+	public static class XMPPRunnable implements Runnable {
+		private SmackCcsClient  mCcsClient;
+		private boolean terminated = false;
+
+		/**
+		 * Create the Smack CCS client, then connect to GCM cloud messaging services with our sender ID and apiKey
+     	 * @param senderId Your GCM project number
+      	 * @param apiKey API Key of your project
+	 	 * @param gcmServer Google Cloud Messaging Server
+	 	 * @param gcmPort Google Cloud Messaging TCP port
+		 */
+		public XMPPRunnable(String senderId, String apiKey, String gcmServer, int gcmPort) throws XMPPException, IOException, SmackException, InterruptedException {
+			mCcsClient = new SmackCcsClient();
+			mCcsClient.connect(senderId, apiKey, gcmServer, gcmPort);
+		}
+
+		public void terminate() {
+			terminated = true;
+		}
+
+		public SmackCcsClient getCcsClient() {
+			return mCcsClient;
+		}
+
+		public void run() {
+			while (!terminated) {
+				try {
+					Thread.sleep(10);
+				} catch (InterruptedException iex) {
+					break;
+				}
+			}
+		}
+    }
+			
+
+	/**
+	 * listener to log connection state changes.
+	 */
+    private static final class LoggingConnectionListener implements ConnectionListener {
 
         @Override
         public void connected(XMPPConnection xmppConnection) {
@@ -395,4 +518,11 @@ public class SmackCcsClient {
 			
 		}
     }
+
+	/**
+	 * return the XMPPTCP connection so callers can add listeners and such.
+	 */
+	public XMPPTCPConnection getConnection() {
+		return connection;
+	}
 }
