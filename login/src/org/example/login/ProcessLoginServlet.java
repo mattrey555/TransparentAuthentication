@@ -5,6 +5,8 @@ import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpSession;
+import javax.servlet.RequestDispatcher;
+import org.json.JSONObject;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.sql.Connection;
@@ -22,6 +24,8 @@ import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
 import java.io.OutputStreamWriter;
 import java.io.BufferedWriter;
+import java.io.UnsupportedEncodingException;
+import java.io.IOException;
 import java.util.List;
 import java.util.Properties;
 import com.visibleautomation.util.StringUtil;
@@ -88,14 +92,15 @@ public class ProcessLoginServlet extends HttpServlet {
 				bw.write(jsonPayload);
 				bw.flush();
 				verifyServletConnection.getOutputStream().close();
-
-				System.out.println("phone number = " + phoneNumber);
-				InputStream is = verifyServletConnection.getInputStream();
-          		BufferedReader br = new BufferedReader(new InputStreamReader(verifyServletConnection.getInputStream()));
-				PrintWriter out = response.getWriter();
-				String line = null;
-            	while ((line = br.readLine()) != null) {
-					out.println(line);
+				HandsetURLAndToken handsetURLAndToken = new HandsetURLAndToken(verifyServletConnection.getInputStream()); 
+				if (handsetURLAndToken.getError().equals("SUCCESS")) {
+					System.out.println("success token = " + handsetURLAndToken.getToken() + " handsetURL = " + handsetURLAndToken.getHandsetURL());
+					RequestDispatcher requestDispatcher = request.getRequestDispatcher("/verifying.jsp");
+					request.setAttribute("handsetURL", handsetURLAndToken.getHandsetURL());
+					requestDispatcher.forward(request, response);
+				} else {
+					System.out.println("failure getting handset URL and token"); 
+					response.sendRedirect("verification_failed.jsp");
 				}
 			}
 		} catch (Exception ex) {
@@ -148,4 +153,44 @@ public class ProcessLoginServlet extends HttpServlet {
 		sbJSON.append("]}");
 		return sbJSON.toString();
 	}
+
+	private static JSONObject parseJSONFromStream(InputStream in) throws UnsupportedEncodingException, IOException {
+		BufferedReader streamReader = new BufferedReader(new InputStreamReader(in, "UTF-8")); 
+		StringBuilder responseStrBuilder = new StringBuilder();
+
+		String inputStr;
+		while ((inputStr = streamReader.readLine()) != null) {
+			responseStrBuilder.append(inputStr);
+		}
+		return new JSONObject(responseStrBuilder.toString());
+	}
+
+	private class HandsetURLAndToken {
+		String handsetURL;
+		String token;
+		String error;
+
+
+		public HandsetURLAndToken(InputStream is) throws UnsupportedEncodingException, IOException {
+			JSONObject jsonObject = parseJSONFromStream(is);
+			error = jsonObject.getString("error");
+			if (error.equals("SUCCESS")) {
+				token = jsonObject.getString("token");
+				handsetURL = jsonObject.getString("handsetURL");
+			}
+		}
+
+		public String getError() {
+			return error;
+		}
+
+		public String getToken() {
+			return token;
+		}
+
+		public String getHandsetURL() {
+			return handsetURL;
+		}
+	}
+
 }

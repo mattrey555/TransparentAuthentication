@@ -4,10 +4,8 @@ import java.io.*;
 import javax.servlet.*;
 import java.net.URL;
 import java.lang.Integer;
-import java.net.URLDecoder;
 import java.util.Map;
 import java.util.HashMap;
-import java.util.UUID;
 import java.util.Date;
 import java.util.ArrayList;
 import java.util.List;
@@ -25,8 +23,8 @@ import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.PreparedStatement;
 import org.jivesoftware.smack.SmackException.NotConnectedException;
-import org.json.JSONArray;
 import org.json.JSONObject;
+import org.json.JSONArray;
 import com.visibleautomation.xmpp.SmackCcsClient;
 import org.json.simple.JSONValue;
 import org.json.simple.parser.ParseException;
@@ -42,41 +40,36 @@ import com.visibleautomation.util.StreamUtil;
  * Servlet which receives verification request from the third-party server.
  */
 public class Verify extends HttpServlet {
-	// phone number used as a unique identifier, which is associated with the GCM client ID in the database
-	private static final String PHONE_NUMBER = "phoneNumber"; 
-
-	// third-party client ID
-	private static final String CLIENT_ID = "clientId"; 
-
-	// max # of hops to request in reverse traceroute
-	private static final String MAX_HOPS = "maxHops"; 
-
-	// third-party site address
-	private static final String SITE_IPADDRESS = "siteIPAddress"; 
-
-	// IP address of accessing terminal
-	private static final String TERMINAL_IPADDRESS = "terminalIPAddress"; 
-
-	// timeout to connect to clinet
-	private static final String TIMEOUT_MSEC = "timeoutMsec"; 
-
 	private static final int SUCCESS = 0;
 	private static final int BAD_URL = 1;
 	private static final int USER_NOT_FOUND = 2;
-	private static final int DATABASE_CONNECTION_FAILED = 2;
 	private static final int POLL_MSEC = 100;
-	private static final String SELECT_BY_PHONE = "select * from user where phone_number=?";
+	private static final int XMPP_TIMEOUT_MSEC = 20000;
+	private static final long DEFAULT_TIME_TO_LIVE = 20000L;
 	private static final String INSERT_REQUEST_ID = "INSERT INTO request (request_id, message_id, request_timestamp, request_token) VALUES (?, ?, ?, ?)"; 
 	private static final String REQUEST_IP_LOCATION = "http://ipinfo.io/%s/json";
+	private static final String SUCCESS_JSON = "{ \"error\": \"SUCCESS\", \"token\": \"%s\", \"handsetURL\": \"%s\"}";
+	private static final String ERROR_JSON = "{ \"error\": \"FAILURE\"}";
+	private static final String FROM = "from";
 	private static String mVerificationResult;
 	private static SmackCcsClient.XMPPRunnable mXMPPRunnable;
-    private static SmackCcsClient mCcsClient = new SmackCcsClient();
     private static boolean mCcsClientConnected = false;
+	private static Connection sDBConnection;
 
+	/**
+     * static initialization: load the properties into constants, load the JDBC devier, and open the connection to the database.
+     */
     static {
         System.out.println("Verify: static initialization for sql.properties");
 		Constants.setDatabaseVariables();
 		Constants.setGCMVariables();
+		try {
+			Class.forName("com.mysql.jdbc.Driver");
+			String dbConnection = String.format(Constants.DB_CONNECTION_FORMAT, Constants.getDBDatabase());
+			sDBConnection = DriverManager.getConnection(dbConnection, Constants.getDBUsername(), Constants.getDBPassword());
+		} catch (Exception ex) {
+			System.out.println("failed to initialize database " + ex.getMessage());
+		}
     }
 
 	public Verify() {
@@ -88,67 +81,35 @@ public class Verify extends HttpServlet {
       	System.out.println("init is getting called");
 	}
 
+	
+	/**
+     * standard servlet post method
+     */
 	@Override
 	public void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
       	// Set response content type
-      	String urlStr = request.getRequestURL().toString();
-      	URL url = new URL(urlStr); 
       	response.setContentType("application/json");
 		System.out.println("doGet is getting called query = " + request.getQueryString());
-		String phoneNumber = null; 
-		String clientId = null; 
-		String errorMessage = "Success";
-		String terminalIPAddress = null;
-		String siteIPAddress = null;
-		int maxHops = 16;
+
+		// parse the URL into a VerifyRequest object
+		VerifyRequest verifyRequest = null; 
+		String errorMessage = null;
 		int errorCode = SUCCESS;
-		int timeoutMsec = 20000;
-		if (request.getQueryString() != null) {
-			String[] pairs = request.getQueryString().split("&");
-			try {   
-				for (String pair : pairs) {
-					String param = getParam(pair); 
-					String value = getValue(pair); 
-					System.out.println("param = " + param + " value = " + value);
-					if (param.equals(PHONE_NUMBER)) {
-						phoneNumber = value;
-					}              
-					if (param.equals(CLIENT_ID)) {
-						clientId = value;
-					}               
-					if (param.equals(SITE_IPADDRESS)) {
-						siteIPAddress = value;
-					}               
-					if (param.equals(TERMINAL_IPADDRESS)) {
-						terminalIPAddress = value;
-					}               
-					if (param.equals(MAX_HOPS)) {
-						maxHops = Integer.valueOf(value);
-					}               
-					if (param.equals(TIMEOUT_MSEC)) {
-						timeoutMsec = Integer.valueOf(value);
-					}               
-				}           
-			} catch (Exception ex) {
-				errorMessage = ex.getMessage();
-				errorCode = BAD_URL;
-			}
-		} else {
+		try {
+			verifyRequest = new VerifyRequest(request.getQueryString());
+			verifyRequest.log();
+		} catch (Exception ex) {
+			errorMessage = ex.getMessage();
 			errorCode = BAD_URL;
 		}
-		String requestId = UUID.randomUUID().toString();
+
+		// generate a random # to send to the mobile (TODO: make this SecureRandom()
         Random random = new Random();
         long messageId = random.nextLong();
- 
-		System.out.println("parameters parsed");
-		System.out.println("phoneNumber = " + phoneNumber);
-		System.out.println("clientId = " + clientId);
-		System.out.println("siteIPAddress = " + siteIPAddress);
-		System.out.println("terminalIPAddress = " + terminalIPAddress);
-		System.out.println("maxHops = " + maxHops);
-		System.out.println("timeoutMsec = " + timeoutMsec);
-		System.out.println("requestId = " + requestId);
-		System.out.println("messageId = " + messageId);
+
+
+		// read the traceroute sent from the third-party website.
+		// TODO: receive this in a separate request for performance.
         String postData = ServletUtil.readPostData(request);
         System.out.println("post data = " + postData);
 		JSONObject jsonObject = new JSONObject(postData);
@@ -158,139 +119,83 @@ public class Verify extends HttpServlet {
 		for (int i = 0; i < terminalTracerouteJSON.length(); i++) {
 			terminalTraceroute.add(terminalTracerouteJSON.getString(i));
 		}
+
 		try {
-			if ((phoneNumber != null) && (clientId != null)) {
-			    ClientData clientData = new ClientData(phoneNumber);
+			if ((verifyRequest != null) && (verifyRequest.getPhoneNumber() != null) && (verifyRequest.getClientId() != null)) {
+			    ClientData clientData = new ClientData(sDBConnection, verifyRequest.getPhoneNumber());
 				System.out.println("sending message to " + clientData.getGCMMessagingId());
 
 				// add a request with a Unique # and add it to the outstanding request list.
-				RequestSet requestSet = RequestSet.getInstance();
-				ResponseData responseData = new ResponseData();
-				requestSet.addRequest(requestId, responseData);
-				responseData.terminalIPAddress = terminalIPAddress;
-				getTerminalLocationInBackground(responseData);
-
-				// get this server's IP address
-				String serverAddress = url.getHost();
-				InetAddress serverInetAddress = InetAddress.getByName(url.getHost());
-				String serverIP = serverInetAddress.getHostAddress();
-				int serverPort = url.getPort();
-
+				/// ResponseData responseData = new ResponseData();
+				// responseData.terminalIPAddress = verifyRequest.getTerminalIPAddress();
+				// getTerminalLocationInBackground(responseData);
 				// request a verification from the handset
-				verifyClient(clientData, siteIPAddress, maxHops, timeoutMsec, requestId, messageId, serverIP, serverPort);
-
-				// wait on the first response from the handset with the location and Connected MAC address
-				responseData = requestSet.waitOnResponse(requestId, timeoutMsec);
-				responseData.terminalTraceroute = terminalTraceroute;
+			    CipherUtil.Token token = CipherUtil.getEncryptedToken(clientData.getPublicKey());
+				String handsetURL = sendTokenAndWaitForHandsetURL(clientData, verifyRequest, messageId, token);
 				PrintWriter out = response.getWriter();
-				out.println("longitude = " + responseData.handsetLongitude);
-				out.println("latitude = " + responseData.handsetLatitude);
-				out.println("handsetIPAddress = " + responseData.handsetIPAddress);
-				out.println("wifiMACAddress = " + responseData.wifiMACAddress);
-				out.println(String.format("terminal location %.4f %.4f", responseData.terminalLatitude, responseData.terminalLongitude));
-				if (responseData.forwardTraceroute != null) {
-					out.println("forward traceroute");
-					for (String ip : responseData.forwardTraceroute) {
-						out.println(ip + " ");
-					}
+				if (handsetURL != null) {
+					out.println(String.format(SUCCESS_JSON, token.getToken(), handsetURL));
+				} else {
+					out.println(ERROR_JSON);
 				}
-				if (responseData.reverseTraceroute != null) {
-					out.println("reverse traceroute");
-					for (String ip : responseData.reverseTraceroute) {
-						out.println(ip + " ");
-					}
-				}
-				if (responseData.terminalTraceroute != null) {
-					out.println("forward traceroute to terminal");
-					for (String ip : responseData.terminalTraceroute) {
-						out.println(ip + " ");
-					}
-				}
-				requestSet.removeRequest(requestId);
 			}
 		} catch (Exception ex) {
 		    ex.printStackTrace();
 		}
 	}
 
+	/**
+	 * callback to wait for the Handset URL which is forwarded to the 3rd party to get the token from.
+	 */
+	private class HandsetURLCallback implements SmackCcsClient.GcmStanzaCallback {
+		private static final String EXTRA_HANDSET_ADDRESS = "handsetIpAddress";
+		private static final String EXTRA_DATA = "data";
+		private String handsetURL = null;
+		private boolean expired = false;
 
-
-	// subclass containing the phone number, messaging ID, and public key for a specific client.
-	private class ClientData {
-	    private static final String SELECT_BY_PHONE = "select * from user where phone_number=?";
-		private String phoneNumber;
-		private String gcmMessagingId;
-		private String publicKey;
-
-		public ClientData(String phoneNumber) throws Exception {
-			this.phoneNumber = phoneNumber;
-			String userId = null;
-			Class.forName("com.mysql.jdbc.Driver");
-			String dbConnection = String.format(Constants.DB_CONNECTION_FORMAT, Constants.sdbDatabase);
-			Connection con = DriverManager.getConnection(dbConnection, Constants.sdbUsername, Constants.sdbPassword);
-			try {
-				PreparedStatement selectStatement = con.prepareStatement(SELECT_BY_PHONE);
-				selectStatement.setString(1, phoneNumber);
-				ResultSet rs = selectStatement.executeQuery();
-				if (rs.first()) {
-					System.out.println("there is a matching record for " + phoneNumber);
-					int phoneNumberColIndex = rs.findColumn("PHONE_NUMBER");
-					String testPhoneNumber = rs.getString(phoneNumberColIndex);
-					int clientUserIdColIndex = rs.findColumn("USER_ID");
-					gcmMessagingId = rs.getString(clientUserIdColIndex);
-					int publicKeyColIndex = rs.findColumn("PUBLIC_KEY");
-					publicKey = rs.getString(publicKeyColIndex);
-					System.out.println("and the user id is " + userId);
-					rs.close();
-				} else {
-					System.out.println("there was no user matching " + phoneNumber);
-				}
-			} finally {
-				con.close();
+	   	public void run(Map<String, Object> jsonObject) {
+			for (String key : jsonObject.keySet()) {
+				System.out.println("key: " + key);
+				System.out.println("type: " + jsonObject.get(EXTRA_DATA).getClass());
 			}
+		    org.json.simple.JSONObject jsonDataObject = (org.json.simple.JSONObject) jsonObject.get(EXTRA_DATA);
+			for (Object key : jsonDataObject.keySet()) {
+				System.out.println("data key: " + key);
+				if (jsonDataObject.get(key) != null) {
+					System.out.println("data type: " + jsonDataObject.get(key).getClass());
+				} else {
+					System.out.println("data was null");
+				}
+			}
+	   		handsetURL = (String) jsonDataObject.get(EXTRA_HANDSET_ADDRESS);	
+			System.out.println("handsetURL = " + handsetURL);
+			mXMPPRunnable.getCcsClient().getConnection().removeAssociatedStanzaListener(this);
+	   	}
+
+	   	public void expired() {
+			expired = true;
+	   	}
+
+		public boolean hasExpired() {
+			return expired;
 		}
 
-		public String getPhoneNumber() {
-			return phoneNumber;
-		}
-
-		public String getPublicKey() {
-			return publicKey;
-		}
-
-		public String getGCMMessagingId() {
-			return gcmMessagingId;
+		public String getHandsetURL() {
+			return handsetURL;
 		}
 	}
+
 
 
 	// initialize the request by storing the request ID and the timestamp.
-	public static void initRequest(String requestId, long messageId, long token) throws Exception {
+	public static void saveRequestToDatabase(String requestId, long messageId, long token) throws Exception {
 		long timestamp = new Date().getTime();
-		Class.forName("com.mysql.jdbc.Driver");
-		String dbConnection = String.format(Constants.DB_CONNECTION_FORMAT, Constants.sdbDatabase);
-		Connection con = DriverManager.getConnection(dbConnection, Constants.sdbUsername, Constants.sdbPassword);
-		try {
-			PreparedStatement insertStatement = con.prepareStatement(INSERT_REQUEST_ID);
-			insertStatement.setString(1, requestId);
-			insertStatement.setLong(2, messageId);
-			insertStatement.setLong(3, timestamp);
-			insertStatement.setLong(4, token);
-			insertStatement.execute();
-		} finally {
-			con.close();
-		}
-	}
-
-	public String getParam(String pair) throws UnsupportedEncodingException {
-        int idx = pair.indexOf("=");
-        return URLDecoder.decode(pair.substring(0, idx), "UTF-8");
-	}
-
-	// get the value for the spectified parameter name
-	public String getValue(String pair) throws UnsupportedEncodingException {
-        int idx = pair.indexOf("=");
-        return URLDecoder.decode(pair.substring(idx + 1), "UTF-8");
+		PreparedStatement insertStatement = sDBConnection.prepareStatement(INSERT_REQUEST_ID);
+		insertStatement.setString(1, requestId);
+		insertStatement.setLong(2, messageId);
+		insertStatement.setLong(3, timestamp);
+		insertStatement.setLong(4, token);
+		insertStatement.execute();
 	}
   
 	public void destroy() {
@@ -308,48 +213,61 @@ public class Verify extends HttpServlet {
      * messageId unique identifier to associate response from handset (note: may be duplicate)
 	 * requestIp Address of this servlet to send the response to.
 	 */
-	public static void verifyClient(ClientData clientData,
-				   final String destIpAddress, 
-				   final int maxHops, 
-				   final int timeoutMsec, 
-				   final String requestId,
-				   final long messageId,
-				   final String requestIp,
-				   final int requestPort) {
+	public String sendTokenAndWaitForHandsetURL(ClientData clientData,
+							 					final VerifyRequest request,
+							 					final long messageId,
+												CipherUtil.Token token) {
 		System.out.println("sending message to " + clientData.getGCMMessagingId());
 		mVerificationResult = null;
 		try {
-			CipherUtil.Token token = CipherUtil.getEncryptedToken(clientData.getPublicKey());
-			synchronized(mCcsClient) {
+			synchronized(this) {
 				if (!mCcsClientConnected) {
-					mXMPPRunnable = new SmackCcsClient.XMPPRunnable(Constants.getGCMProjectId(), Constants.getGCMApiKey(), Constants.getGCMServer(), Constants.getGCMPort());
+					mXMPPRunnable = new SmackCcsClient.XMPPRunnable(Constants.getGCMProjectId(), Constants.getGCMApiKey(), 
+																	Constants.getGCMServer(), Constants.getGCMPort());
 					Thread xmppThread = new Thread(mXMPPRunnable);
 					xmppThread.start();
 					mCcsClientConnected = true;
 				}
 			}
 			// Send a sample hello downstream message to a device.
-			String ccsMessageId = mCcsClient.nextMessageId();
+			String ccsMessageId = mXMPPRunnable.getCcsClient().nextMessageId();
 			Map<String, String> payload = new HashMap<String, String>();
 			payload.put("RequestAuthorization", "Request");
-			payload.put("destIpAddress", destIpAddress);
-			payload.put("requestId", requestId);
+			payload.put("destIpAddress", request.getSiteIPAddress());
+			payload.put("requestId", request.getRequestId());
 			payload.put("messageId", ccsMessageId);
-			payload.put("maxHops", Integer.toString(maxHops));
+			payload.put("maxHops", Integer.toString(request.getMaxHops()));
 			payload.put("embeddedMessageId", Long.toString(messageId));
-			payload.put("requestIp", requestIp);
-			payload.put("requestPort", Integer.toString(requestPort));
 			payload.put("delivery_receipt_requested", "true");
 			payload.put("token", token.getEncryptedToken());
+
+			// what should this be?
 			String collapseKey = "sample";
-			Long timeToLive = 20000L;
+			HandsetURLCallback callback = new HandsetURLCallback();
+			mXMPPRunnable.getCcsClient().addStanzaCallback(FROM, clientData.getGCMMessagingId(), Constants.getGCMProjectId(),
+														   callback, XMPP_TIMEOUT_MSEC);
+			Long timeToLive = DEFAULT_TIME_TO_LIVE;
 			String message = createGCMMessage(clientData.getGCMMessagingId(), ccsMessageId, payload, collapseKey, timeToLive, true);
 			System.out.println("sending " + message);
 			mXMPPRunnable.getCcsClient().sendDownstreamMessage(message);
-			initRequest(requestId, messageId, token.getToken());
+			saveRequestToDatabase(request.getRequestId(), messageId, token.getToken());
+			waitForHandsetResponse(callback);
+			return callback.getHandsetURL();	
 		} catch (Exception ex) {
 			ex.printStackTrace();
+			return null;
 		}
+	}
+
+	public boolean waitForHandsetResponse(HandsetURLCallback callback) {
+		while ((callback.getHandsetURL() == null) && !callback.hasExpired()) {
+			try {
+				Thread.sleep(20);
+			} catch (InterruptedException iex) {
+				break;
+			}
+		}
+		return (callback.getHandsetURL() != null);
 	}
 
     /**

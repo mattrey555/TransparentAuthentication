@@ -34,13 +34,14 @@ public class CipherUtil {
 			return this.encryptedToken;
 		}
     }
+
 	public static Token getEncryptedToken(String publicKeyString) throws Exception {
 		// generate and encode a random number to send to the client, which it will decrypt with
 		// its private key, then request a verification from the handset.
 		Random random = new Random();
 		long randVal = random.nextLong();
 		String encryptedToken = null;
-		Cipher c = Cipher.getInstance("RSA");
+		Cipher c = Cipher.getInstance("RSA/ECB/PKCS1Padding");
 		byte[] keyBytes = Base64.getDecoder().decode(publicKeyString);
 		PublicKey publicKey = KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(keyBytes));
 		c.init(Cipher.ENCRYPT_MODE, publicKey);
@@ -50,6 +51,11 @@ public class CipherUtil {
 		cipherOutputStream.flush();
 		cipherOutputStream.close();
 		byte[] encryptedBytes = outputStream.toByteArray();
+		System.out.println("base64 Encoded Encrypted bytes");
+		for (int i = 0; i < encryptedBytes.length; i++) {
+			System.out.print(String.format("%02X ", encryptedBytes[i]));
+		}
+		System.out.println("");
 		encryptedToken = Base64.getEncoder().encodeToString(encryptedBytes);
 	    return new Token(randVal, encryptedToken);
 	}

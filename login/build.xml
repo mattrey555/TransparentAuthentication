@@ -22,7 +22,8 @@
 	    <pathelement location="${jetty-lib}/mysql-connector-java-${mysql-version}-bin.jar" />
 	    <pathelement location="${jetty-jsp}/org.mortbay.jasper.apache-jsp-${jsp-version}.jar" />
 	    <pathelement location="${jetty-jsp}/org.mortbay.jasper.apache-el-${jsp-version}.jar" />
-		<pathelement location="${jetty-lib}/tmfa_util.jar" />
+		<pathelement location="${lib}/org.json-${json-version}.jar" />
+		<pathelement location="${lib}/tmfa_util.jar" />
     </path>
 	<tstamp prefix="build-info">
 		<format property="current-date" pattern="d-MMMM-yyyy" locale="en" />
