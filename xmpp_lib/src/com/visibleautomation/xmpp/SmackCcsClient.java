@@ -60,7 +60,7 @@ public class SmackCcsClient {
         });
     }
 
-    private XMPPTCPConnection connection;
+    private XMPPTCPStanzaConnection connection;
 
     /**
      * Indicates whether the connection is in draining state, which means that it
@@ -221,8 +221,7 @@ public class SmackCcsClient {
     		     .setSocketFactory(SSLSocketFactory.getDefault())
     		    .build();
     	
-        //connection = new FixedXMPPTCPConnection(config, senderId, apiKey);
-        connection = new XMPPTCPConnection(config);
+        connection = new XMPPTCPStanzaConnection(config);
         
         //disable Roster as I don't think this is supported by GCM
         Roster roster = Roster.getInstanceFor(connection);
@@ -248,17 +247,14 @@ public class SmackCcsClient {
     
 		@Override
 		public boolean accept(Stanza arg0) {
-			// TODO Auto-generated method stub
-			if(arg0.getClass() == Stanza.class) {
+			if (arg0.getClass() == Stanza.class) {
 				return true;
 			} else {
-/*
 				if (arg0.getTo()!= null) {
 					if(arg0.getTo().startsWith(YOUR_PROJECT_ID)) {
 						return true;
 					}
 				}
-*/
 			}
 			return false;
 		}
@@ -347,6 +343,15 @@ public class SmackCcsClient {
         }
     }
 
+	/**
+     * Add a stanza callback which filters on a key-value pair, and is installed with a timeout.
+	 * @param key key in the returned JSON
+     * @param value value in the returned JSON (may be null)
+     * @param to your GCM project ID.
+     * @param callback called when the matching packet was received.
+     * @param timeoutMsec uninstall the allback, and call
+     */
+
 	public void addStanzaCallback(String key, String value, String to, GcmStanzaCallback callback, long timeoutMsec) {
         connection.addAsyncStanzaListener(new GcmStanzaListener(key, value, callback, timeoutMsec), new GcmStanzaFilter(to));
 	}
@@ -378,7 +383,7 @@ public class SmackCcsClient {
 	/**
 	 * Stanza listener which calls a user-supplied callback when a packet is received with a specified key-value pair
 	 */
-    private static class GcmStanzaListener implements StanzaListener {
+    public static class GcmStanzaListener implements StanzaListener {
 		private static String key;
 		private static String value;
 		private GcmStanzaCallback callback;
@@ -391,13 +396,22 @@ public class SmackCcsClient {
 		 * @param key JSON tag to search for
 		 * @param value JSON value to match (not matched if null)
 		 * @param callback run() is called on match, expired() called if timeoutMsec has elapsed.
-		 * @param timeoutMsec elapsed time to wait for a match.
+		 * @param timeoutMsec elapsed time to wait for a match.  Call callback.expired() when timeoutMsec 
+		 * has passed
 		 */
 		public GcmStanzaListener(String key, String value, GcmStanzaCallback callback, long timeoutMsec) {
 			this.key = key;
 			this.value = value;
 			this.callback = callback;
 			this.timeoutMsec = timeoutMsec;
+		}
+
+		public GcmStanzaCallback getCallback() {
+			return callback;
+		}
+
+		public long getTimeoutMsec() {
+			return timeoutMsec;
 		}
 
         @Override
@@ -416,13 +430,14 @@ public class SmackCcsClient {
                 if (messageType == null) {
                     // Normal upstream data message
                     if (isMatchedUpstreamMessage(jsonObject)) {
+						System.out.println("calling callback matching " + json);
 						callback.run(jsonObject);
 					}
 				}
 			} catch (ParseException e) {
-                System.out.println("Error parsing JSON " + json);
+                System.out.println("Error parsing JSON " + json + " exception = " + e);
             } catch (Exception e) {
-                System.out.println("Failed to process packet");
+                System.out.println("Failed to process packet " + e.getMessage());
             }
 		}
 
@@ -468,6 +483,7 @@ public class SmackCcsClient {
 			while (!terminated) {
 				try {
 					Thread.sleep(10);
+					mCcsClient.getConnection().callAndRemoveExpired(System.currentTimeMillis());
 				} catch (InterruptedException iex) {
 					break;
 				}
@@ -522,7 +538,7 @@ public class SmackCcsClient {
 	/**
 	 * return the XMPPTCP connection so callers can add listeners and such.
 	 */
-	public XMPPTCPConnection getConnection() {
+	public XMPPTCPStanzaConnection getConnection() {
 		return connection;
 	}
 }

@@ -20,7 +20,8 @@ create table request (REQUEST_ID VARCHAR(512) NOT NULL PRIMARY KEY,
 		      LONGITUDE DECIMAL,
 		      HANDSET_IP_ADDRESS VARCHAR(128),
 		      WIFI_MAC_ADDR VARCHAR(128),
-		      REQUEST_TIMESTAMP BIGINT NOT NULL);
+		      REQUEST_TIMESTAMP BIGINT NOT NULL,
+		      CALLBACK_URL VARCHAR(512));
 create index client_client_id on client(client_id);
 create index client_phone_number on client(phone_number);
 create index client_client_user_id on client(client_user_id);
