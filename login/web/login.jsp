@@ -7,6 +7,7 @@
     </head>
     <body>
         <form method="post" action="processLogin">
+			<input type="hidden" name="sessionId" value="${sessionId}">
             <center>
             <table border="1" width="30%" cellpadding="3">
                 <thead>

@@ -17,8 +17,9 @@
 			function httpGetAsync(theUrl) {
 				var xmlHttp = new XMLHttpRequest();
 				xmlHttp.onreadystatechange = function() { 
-					if (xmlHttp.readyState == 4 && xmlHttp.status == 200)
-						alert('callback data from' + theUrl + ' status = ' + xmlHttp.status + ' response text = ' + xmlHttp.response + ' response type = ' + xmlHttp.responseType + ' ready state = ' + xmlHttp.readyState + ' headers = ' + xmlHttp.getAllResponseHeaders());
+					if (xmlHttp.readyState == 4 && xmlHttp.status == 200) {
+						postTokenCallback(xmlHttp.response);
+					}
 				}
 				xmlHttp.open("GET", theUrl, true); 
 				xmlHttp.send();
@@ -43,7 +44,7 @@
 				form.submit();
 			}
 			function postTokenCallback(responseText) {
-				post('http://' + location.host + '/processToken',  {'token':responseText});
+				post('/login/processToken',  {'token':responseText, 'sessionId':'${sessionId}'});
 			}
 		</script>
     </body>

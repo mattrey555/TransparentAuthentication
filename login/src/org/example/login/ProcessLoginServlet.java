@@ -36,18 +36,28 @@ import com.visibleautomation.util.ProcessUtil;
  */
 public class ProcessLoginServlet extends HttpServlet {
 	private static final String SELECT_USERNAME_PASSWORD = "SELECT * FROM USER WHERE USER_ID=? AND PWD=?";
+	private static final String UPDATE_TOKEN_FOR_SESSION_ID = "UPDATE SESSION SET TOKEN=? WHERE SESSION_ID=?";
 	private static final String VERIFY_URL_FORMAT = "http://%s/verify/verify?phoneNumber=%s&terminalIPAddress=%s&siteIPAddress=%s&clientId=%d&maxHops=%d&timeoutMsec=%d";
 	private static final String IP_REGEXP = "\"[0-9]*\\.[0-9]*\\.[0-9]*\\.[0-9]*\"";
 	private static final String TRACEROUTE_CMD = "traceroute -n --module=udp --queries=1 %s -w 0.25 --back | grep -v \"\\*\" | grep -o " + IP_REGEXP;
 	private static final String JSON_TAG_TERMINAL_IP_ADDRESS = "terminalIPAddress";
 	private static final String JSON_TAG_TRACEROUTE = "traceroute";
    	private static final String URL_PARAM_USERNAME = "username";
-    	private static final String URL_PARAM_PASSWORD = "password";
+	private static final String URL_PARAM_PASSWORD = "password";
+	private static final String URL_PARAM_SESSIONID = "sessionId";
+	private static Connection sDBConnection;
 	
 	static {
 		System.out.println("ProcessLoginServlet: static initialization for sql.properties");
 		Constants.setDatabaseVariables();
 		Constants.setNetworkVariables();
+		try {
+		   Class.forName("com.mysql.jdbc.Driver");
+		   String dbConnection = String.format(Constants.DB_CONNECTION_FORMAT, Constants.getDBDatabase());
+		   sDBConnection = DriverManager.getConnection(dbConnection, Constants.getDBUsername(), Constants.getDBPassword());
+		} catch (Exception ex) {
+			System.out.println("threw an exception initializing the database " + ex.getMessage());
+		}
 	}
 
     public ProcessLoginServlet() {
@@ -59,7 +69,8 @@ public class ProcessLoginServlet extends HttpServlet {
 		try {	    
 			String username  = request.getParameter(URL_PARAM_USERNAME);
 			String password  = request.getParameter(URL_PARAM_PASSWORD);
-			System.out.println("username = " + username + " password = " + password);
+			String sessionId  = request.getParameter(URL_PARAM_SESSIONID);
+			System.out.println("username = " + username + " password = " + password + " sessionID = " + sessionId);
 			String phoneNumber = verifyLogin(username, password);
 			if (phoneNumber == null) {
 				response.sendRedirect("login_failed.jsp");
@@ -94,9 +105,11 @@ public class ProcessLoginServlet extends HttpServlet {
 				verifyServletConnection.getOutputStream().close();
 				HandsetURLAndToken handsetURLAndToken = new HandsetURLAndToken(verifyServletConnection.getInputStream()); 
 				if (handsetURLAndToken.getError().equals("SUCCESS")) {
+					saveToken(sessionId, handsetURLAndToken.getToken());
 					System.out.println("success token = " + handsetURLAndToken.getToken() + " handsetURL = " + handsetURLAndToken.getHandsetURL());
 					RequestDispatcher requestDispatcher = request.getRequestDispatcher("/verifying.jsp");
 					request.setAttribute("handsetURL", handsetURLAndToken.getHandsetURL());
+					request.setAttribute("sessionId", sessionId);
 					requestDispatcher.forward(request, response);
 				} else {
 					System.out.println("failure getting handset URL and token"); 
@@ -111,28 +124,29 @@ public class ProcessLoginServlet extends HttpServlet {
 	// given the username and password from the UI, return the userID if it exists, or null if it doesn't
 
    private String verifyLogin(String username, String password) throws Exception {
-		Class.forName("com.mysql.jdbc.Driver");
         String phoneNumber = null;
-		String dbConnection = String.format(Constants.DB_CONNECTION, Constants.getDBDatabase());
-        Connection con = DriverManager.getConnection(dbConnection, Constants.getDBUsername(), Constants.getDBPassword());
-        try {
-            PreparedStatement selectStatement = con.prepareStatement(SELECT_USERNAME_PASSWORD);
-            selectStatement.setString(1, username);
-            selectStatement.setString(2, password);
-			System.out.println("select statement = " + selectStatement.toString());
-            ResultSet rs = selectStatement.executeQuery();
-            if (rs.first()) {
-                int clientUserIdColIndex = rs.findColumn("PHONE_NUMBER");
-                phoneNumber = rs.getString(clientUserIdColIndex);
-                System.out.println("and the phone number is " + phoneNumber);
-                rs.close();
-				return phoneNumber;
-            } 
-        } finally {
-            con.close();
-        }
+		PreparedStatement selectStatement = sDBConnection.prepareStatement(SELECT_USERNAME_PASSWORD);
+		selectStatement.setString(1, username);
+		selectStatement.setString(2, password);
+		System.out.println("select statement = " + selectStatement.toString());
+		ResultSet rs = selectStatement.executeQuery();
+		if (rs.first()) {
+			int clientUserIdColIndex = rs.findColumn("PHONE_NUMBER");
+			phoneNumber = rs.getString(clientUserIdColIndex);
+			System.out.println("and the phone number is " + phoneNumber);
+			rs.close();
+			return phoneNumber;
+		} 
         return null;
     }
+
+	// save the token from verification with the sessionID
+	private void saveToken(String sessionId, String token) throws Exception {
+		PreparedStatement updateStatement = sDBConnection.prepareStatement(UPDATE_TOKEN_FOR_SESSION_ID);
+		updateStatement.setString(1, token);
+		updateStatement.setString(2, sessionId);
+		updateStatement.execute();
+	}
 
 	// Create the JSON payload including the terminal IP address and the traceroute to it.
 	private String createPayload(String terminalIPAddress) throws Exception {
@@ -192,5 +206,4 @@ public class ProcessLoginServlet extends HttpServlet {
 			return handsetURL;
 		}
 	}
-
 }

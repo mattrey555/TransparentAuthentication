@@ -36,11 +36,27 @@
      <url-pattern>*.XSP</url-pattern>
    </servlet-mapping>
 -->
-  <servlet>
-    <servlet-name>ProcessLoginServlet</servlet-name>
-    <servlet-class>org.example.login.ProcessLoginServlet</servlet-class>
-  </servlet>
-  <!-- JSPC servlet mappings start -->
+	<servlet>
+    	<servlet-name>LoginServlet</servlet-name>
+    	<servlet-class>org.example.login.LoginServlet</servlet-class>
+  	</servlet>
+
+		<!-- JSPC servlet mappings start -->
+
+    <servlet>
+        <servlet-name>org.example.login.verifying_jsp</servlet-name>
+        <servlet-class>org.example.login.verifying_jsp</servlet-class>
+    </servlet>
+
+    <servlet>
+        <servlet-name>org.example.login.verify_005fsuccessful_jsp</servlet-name>
+        <servlet-class>org.example.login.verify_005fsuccessful_jsp</servlet-class>
+    </servlet>
+
+    <servlet>
+        <servlet-name>org.example.login.verification_005ffailed_jsp</servlet-name>
+        <servlet-class>org.example.login.verification_005ffailed_jsp</servlet-class>
+    </servlet>
 
     <servlet>
         <servlet-name>org.example.login.register_jsp</servlet-name>
@@ -76,6 +92,21 @@
         <servlet-name>org.example.login.login_005ffailed_jsp</servlet-name>
         <servlet-class>org.example.login.login_005ffailed_jsp</servlet-class>
     </servlet>
+
+    <servlet-mapping>
+        <servlet-name>org.example.login.verifying_jsp</servlet-name>
+        <url-pattern>/verifying.jsp</url-pattern>
+    </servlet-mapping>
+
+    <servlet-mapping>
+        <servlet-name>org.example.login.verify_005fsuccessful_jsp</servlet-name>
+        <url-pattern>/verify_successful.jsp</url-pattern>
+    </servlet-mapping>
+
+    <servlet-mapping>
+        <servlet-name>org.example.login.verification_005ffailed_jsp</servlet-name>
+        <url-pattern>/verification_failed.jsp</url-pattern>
+    </servlet-mapping>
 
     <servlet-mapping>
         <servlet-name>org.example.login.register_jsp</servlet-name>
@@ -115,18 +146,37 @@
 <!-- JSPC servlet mappings end -->
 
 <servlet-mapping>
-    <servlet-name>ProcessLoginServlet</servlet-name>
-    <url-pattern>/processLogin</url-pattern>
-  </servlet-mapping>
+    	<servlet-name>LoginServlet</servlet-name>
+    	<url-pattern>/login</url-pattern>
+  	</servlet-mapping>
 
-  <servlet>
-    <servlet-name>ProcessRegisterServlet</servlet-name>
-    <servlet-class>org.example.login.ProcessRegisterServlet</servlet-class>
-  </servlet>
-  <servlet-mapping>
-    <servlet-name>ProcessRegisterServlet</servlet-name>
-    <url-pattern>/processRegister</url-pattern>
-  </servlet-mapping>
+  	<servlet>
+    	<servlet-name>ProcessLoginServlet</servlet-name>
+    	<servlet-class>org.example.login.ProcessLoginServlet</servlet-class>
+  	</servlet>
 
-     
-</web-app>
+	<servlet-mapping>
+    	<servlet-name>ProcessLoginServlet</servlet-name>
+    	<url-pattern>/processLogin</url-pattern>
+  	</servlet-mapping>
+
+  	<servlet>
+    	<servlet-name>ProcessRegisterServlet</servlet-name>
+    	<servlet-class>org.example.login.ProcessRegisterServlet</servlet-class>
+  	</servlet>
+
+  	<servlet-mapping>
+    	<servlet-name>ProcessRegisterServlet</servlet-name>
+    	<url-pattern>/processRegister</url-pattern>
+  	</servlet-mapping>
+
+  	<servlet>
+    	<servlet-name>ProcessTokenServlet</servlet-name>
+    	<servlet-class>org.example.login.ProcessTokenServlet</servlet-class>
+  	</servlet>
+
+  	<servlet-mapping>
+    	<servlet-name>ProcessTokenServlet</servlet-name>
+    	<url-pattern>/processToken</url-pattern>
+  	</servlet-mapping>
+  </web-app>
