@@ -21,6 +21,7 @@ import java.util.UUID;
  */
 public class ProcessTokenServlet extends HttpServlet {
 	private static final String SELECT_SESSION_ID = "SELECT TOKEN from SESSION WHERE SESSION_ID=?";
+	private static final String DELETE_SESSION_ID = "DELETE from SESSION WHERE SESSION_ID=?";
 	private static final String URL_PARAM_SESSION_ID = "sessionId";
 	private static final String URL_PARAM_TOKEN = "token";
 	private static Connection sDBConnection;
@@ -52,10 +53,18 @@ public class ProcessTokenServlet extends HttpServlet {
 			} else {
 				response.sendRedirect("verify_failed.jsp");
 			}
+			deleteSession(sessionId);
 		} catch (SQLException sqlex) {
 			System.out.println("failed to select session UUID " + sqlex.getMessage());
 		}
 	}
+
+	public void deleteSession(String sessionId) throws SQLException {
+		PreparedStatement deleteStatement = sDBConnection.prepareStatement(DELETE_SESSION_ID);
+		deleteStatement.setString(1, sessionId);
+		deleteStatement.execute();
+	}
+		
 
 	public boolean matchToken(String sessionId, String token) throws SQLException {
 		PreparedStatement selectStatement = sDBConnection.prepareStatement(SELECT_SESSION_ID);
@@ -68,7 +77,4 @@ public class ProcessTokenServlet extends HttpServlet {
 		}
 		return false;
 	}
-
-					    
-		
 }

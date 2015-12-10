@@ -48,8 +48,8 @@ public class Verify extends HttpServlet {
 	private static final long DEFAULT_TIME_TO_LIVE = 20000L;
 	private static final String INSERT_REQUEST_ID = "INSERT INTO request (request_id, message_id, request_timestamp, request_token) VALUES (?, ?, ?, ?)"; 
 	private static final String REQUEST_IP_LOCATION = "http://ipinfo.io/%s/json";
-	private static final String SUCCESS_JSON = "{ \"error\": \"SUCCESS\", \"token\": \"%s\", \"handsetURL\": \"%s\"}";
-	private static final String ERROR_JSON = "{ \"error\": \"FAILURE\"}";
+	private static final String SUCCESS_JSON = "{ \"error\": \"SUCCESS\", \"token\": \"%s\", \"handsetURL\": \"%s\", \"requestId\": \"%s\"}";
+	private static final String ERROR_JSON = "{ \"error\": \"FAILURE\", \"requestId\": \"%s\"}";
 	private static final String FROM = "from";
 	private static String mVerificationResult;
 	private static SmackCcsClient.XMPPRunnable mXMPPRunnable;
@@ -114,11 +114,6 @@ public class Verify extends HttpServlet {
         System.out.println("post data = " + postData);
 		JSONObject jsonObject = new JSONObject(postData);
 		String terminalIPAddressFromJSON = jsonObject.getString("terminalIPAddress");
-		JSONArray terminalTracerouteJSON = jsonObject.getJSONArray("traceroute");
-		List<String> terminalTraceroute = new ArrayList<String>(terminalTracerouteJSON.length());
-		for (int i = 0; i < terminalTracerouteJSON.length(); i++) {
-			terminalTraceroute.add(terminalTracerouteJSON.getString(i));
-		}
 
 		try {
 			if ((verifyRequest != null) && (verifyRequest.getPhoneNumber() != null) && (verifyRequest.getClientId() != null)) {
@@ -134,9 +129,9 @@ public class Verify extends HttpServlet {
 				String handsetURL = sendTokenAndWaitForHandsetURL(clientData, verifyRequest, messageId, token);
 				PrintWriter out = response.getWriter();
 				if (handsetURL != null) {
-					out.println(String.format(SUCCESS_JSON, token.getToken(), handsetURL));
+					out.println(String.format(SUCCESS_JSON, token.getToken(), handsetURL, verifyRequest.getRequestId()));
 				} else {
-					out.println(ERROR_JSON);
+					out.println(String.format(ERROR_JSON, verifyRequest.getRequestId()));
 				}
 			}
 		} catch (Exception ex) {
@@ -247,7 +242,7 @@ public class Verify extends HttpServlet {
 			mXMPPRunnable.getCcsClient().addStanzaCallback(FROM, clientData.getGCMMessagingId(), Constants.getGCMProjectId(),
 														   callback, XMPP_TIMEOUT_MSEC);
 			Long timeToLive = DEFAULT_TIME_TO_LIVE;
-			String message = createGCMMessage(clientData.getGCMMessagingId(), ccsMessageId, payload, collapseKey, timeToLive, true);
+			String message = createGCMMessage(clientData.getGCMMessagingId(), ccsMessageId, payload, collapseKey, timeToLive, false);
 			System.out.println("sending " + message);
 			mXMPPRunnable.getCcsClient().sendDownstreamMessage(message);
 			saveRequestToDatabase(request.getRequestId(), messageId, token.getToken());

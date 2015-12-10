@@ -21,6 +21,10 @@
     <servlet-name>Respond</servlet-name>
     <servlet-class>com.visibleautomation.verify.Respond</servlet-class>
   </servlet>
+  <servlet>
+    <servlet-name>SaveTraceroute</servlet-name>
+    <servlet-class>com.visibleautomation.verify.SaveTraceroute</servlet-class>
+  </servlet>
 
   <servlet-mapping>
     <servlet-name>HelloWorld</servlet-name>
@@ -38,4 +42,19 @@
     <servlet-name>Respond</servlet-name>
     <url-pattern>/respond</url-pattern>
   </servlet-mapping>
+  <servlet-mapping>
+    <servlet-name>SaveTraceroute</servlet-name>
+    <url-pattern>/saveTraceroute</url-pattern>
+  </servlet-mapping>
+
+	<security-constraint>
+        <web-resource-collection>
+            <web-resource-name>Secure resources</web-resource-name>
+            <url-pattern>/verify/*</url-pattern>
+        </web-resource-collection>
+        <user-data-constraint>
+            <transport-guarantee>CONFIDENTIAL</transport-guarantee>
+        </user-data-constraint>
+    </security-constraint>
+
 </web-app>

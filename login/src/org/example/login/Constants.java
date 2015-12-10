@@ -83,7 +83,7 @@ public class Constants {
 			if (is != null) {
 				sqlProperties.load(is);
 				sNetVerifyAddress = sqlProperties.getProperty(NET_VERIFY_ADDRESS);
-				sNetClientId = Integer.parseInt(sqlProperties.getProperty(NET_VERIFY_ADDRESS));
+				sNetClientId = Integer.parseInt(sqlProperties.getProperty(NET_CLIENT_ID));
 				sNetMaxHops = Integer.parseInt(sqlProperties.getProperty(NET_MAX_HOPS));
 				sNetTimeoutMsec = Integer.parseInt(sqlProperties.getProperty(NET_TIMEOUT_MSEC));
 				System.out.println("ProcessLoginServlet: network.properties file loaded successfully verify address = " + sNetVerifyAddress + 
@@ -94,9 +94,11 @@ public class Constants {
 				System.out.println("failed to load " + NET_PROPERTIES_FILE);
 			}
 		} catch (IOException ioex) {
-			System.out.println("ProcessLoginServlet: failed to load properties file " + NET_PROPERTIES_FILE + "message = " + ioex.getMessage());
+			System.out.println("ProcessLoginServlet: failed to load properties file " + NET_PROPERTIES_FILE + " message = " + ioex.getMessage());
+			ioex.printStackTrace();
 		} catch (Exception ex) {
-			System.out.println("ProcessLoginServlet: failed to load properties file " + NET_PROPERTIES_FILE + "message = " + ex.getMessage());
+			System.out.println("ProcessLoginServlet: failed to load properties file " + NET_PROPERTIES_FILE + " message = " + ex.getMessage());
+			ex.printStackTrace();
 		} finally {
 			try {
 				if (is != null) {

@@ -29,6 +29,7 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Properties;
 import com.visibleautomation.util.StringUtil;
+import com.visibleautomation.util.ServletUtil;
 import com.visibleautomation.util.ProcessUtil;
 
 /**
@@ -36,8 +37,9 @@ import com.visibleautomation.util.ProcessUtil;
  */
 public class ProcessLoginServlet extends HttpServlet {
 	private static final String SELECT_USERNAME_PASSWORD = "SELECT * FROM USER WHERE USER_ID=? AND PWD=?";
-	private static final String UPDATE_TOKEN_FOR_SESSION_ID = "UPDATE SESSION SET TOKEN=? WHERE SESSION_ID=?";
-	private static final String VERIFY_URL_FORMAT = "http://%s/verify/verify?phoneNumber=%s&terminalIPAddress=%s&siteIPAddress=%s&clientId=%d&maxHops=%d&timeoutMsec=%d";
+	private static final String UPDATE_TOKEN_AND_SESSION_ID = "UPDATE SESSION SET TOKEN=?,VERIFY_SESSION_ID=?  WHERE SESSION_ID=?";
+	private static final String VERIFY_URL_FORMAT = "https://%s/verify/verify?phoneNumber=%s&terminalIPAddress=%s&siteIPAddress=%s&clientId=%d&maxHops=%d&timeoutMsec=%d";
+	private static final String POST_TRACEROUTE_URL_FORMAT = "https://%s/verify/postTraceroute?requestId=%s";
 	private static final String IP_REGEXP = "\"[0-9]*\\.[0-9]*\\.[0-9]*\\.[0-9]*\"";
 	private static final String TRACEROUTE_CMD = "traceroute -n --module=udp --queries=1 %s -w 0.25 --back | grep -v \"\\*\" | grep -o " + IP_REGEXP;
 	private static final String JSON_TAG_TERMINAL_IP_ADDRESS = "terminalIPAddress";
@@ -58,6 +60,19 @@ public class ProcessLoginServlet extends HttpServlet {
 		} catch (Exception ex) {
 			System.out.println("threw an exception initializing the database " + ex.getMessage());
 		}
+	}
+	static {
+	    //for localhost testing only
+	    javax.net.ssl.HttpsURLConnection.setDefaultHostnameVerifier(
+	    new javax.net.ssl.HostnameVerifier(){
+
+	        public boolean verify(String hostname, javax.net.ssl.SSLSession sslSession) {
+	            if (hostname.equals("localhost")) {
+	                return true;
+	            }
+	            return false;
+	        }
+	    });
 	}
 
     public ProcessLoginServlet() {
@@ -93,20 +108,14 @@ public class ProcessLoginServlet extends HttpServlet {
 				String verifyURLStr = String.format(VERIFY_URL_FORMAT, Constants.getVerifyAddress(), phoneNumber, terminalIPAddress, 
 												    siteIPAddress, Constants.getClientId(), 
 												    Constants.getMaxHops(), Constants.getTimeoutMsec());
+				System.out.println(verifyURLStr);
 				URL verifyURL = new URL(verifyURLStr);
-				HttpURLConnection verifyServletConnection = (HttpURLConnection) verifyURL.openConnection();
-				verifyServletConnection.setRequestMethod("POST");
-				verifyServletConnection.setDoOutput(true);
-				String jsonPayload = createPayload(terminalIPAddress);
-				System.out.println("writing payload " + jsonPayload);
-				BufferedWriter bw = new BufferedWriter(new OutputStreamWriter(verifyServletConnection.getOutputStream()));
-				bw.write(jsonPayload);
-				bw.flush();
-				verifyServletConnection.getOutputStream().close();
-				HandsetURLAndToken handsetURLAndToken = new HandsetURLAndToken(verifyServletConnection.getInputStream()); 
+				HttpURLConnection verifyUrlConnection = ServletUtil.postUrlString(verifyURL, createPayload(terminalIPAddress));
+				HandsetURLAndToken handsetURLAndToken = new HandsetURLAndToken(verifyUrlConnection.getInputStream()); 
 				if (handsetURLAndToken.getError().equals("SUCCESS")) {
-					saveToken(sessionId, handsetURLAndToken.getToken());
-					System.out.println("success token = " + handsetURLAndToken.getToken() + " handsetURL = " + handsetURLAndToken.getHandsetURL());
+					handsetURLAndToken.saveToken(sDBConnection, sessionId);
+					System.out.println("success token = " + handsetURLAndToken.getToken() + 
+									   " handsetURL = " + handsetURLAndToken.getHandsetURL());
 					RequestDispatcher requestDispatcher = request.getRequestDispatcher("/verifying.jsp");
 					request.setAttribute("handsetURL", handsetURLAndToken.getHandsetURL());
 					request.setAttribute("sessionId", sessionId);
@@ -115,6 +124,9 @@ public class ProcessLoginServlet extends HttpServlet {
 					System.out.println("failure getting handset URL and token"); 
 					response.sendRedirect("verification_failed.jsp");
 				}
+
+				// post the traceroute from the terminal to this site, and send it to the verifier
+				postForwardTraceRoute(handsetURLAndToken.getRequestId(), terminalIPAddress);
 			}
 		} catch (Exception ex) {
 			ex.printStackTrace();
@@ -140,32 +152,51 @@ public class ProcessLoginServlet extends HttpServlet {
         return null;
     }
 
-	// save the token from verification with the sessionID
-	private void saveToken(String sessionId, String token) throws Exception {
-		PreparedStatement updateStatement = sDBConnection.prepareStatement(UPDATE_TOKEN_FOR_SESSION_ID);
-		updateStatement.setString(1, token);
-		updateStatement.setString(2, sessionId);
-		updateStatement.execute();
-	}
-
 	// Create the JSON payload including the terminal IP address and the traceroute to it.
 	private String createPayload(String terminalIPAddress) throws Exception {
-	   	String forwardTraceroute = ProcessUtil.pipeCommand(String.format(TRACEROUTE_CMD, terminalIPAddress));
-	   	System.out.println("forward traceroute : " + forwardTraceroute); 
-   	   	List<String> forwardTracerouteList = StringUtil.splitList(forwardTraceroute, "\n");
+		return String.format("{\"%s\" : \"%s\"}", JSON_TAG_TERMINAL_IP_ADDRESS, terminalIPAddress);
+	}
+
+	private String tracerouteToJSON(String forwardTraceroute) {
 	   	StringBuffer sbJSON = new StringBuffer();
 		sbJSON.append("{");
-		sbJSON.append(String.format("\"%s\" : \"%s\",\n", JSON_TAG_TERMINAL_IP_ADDRESS, terminalIPAddress));
 	   	sbJSON.append(String.format("\"%s\" : [", JSON_TAG_TRACEROUTE));
-		for (int i = 0; i < forwardTracerouteList.size(); i++) {
-	   		String ipAddr = forwardTracerouteList.get(i);
+		String[] forwardTracerouteArray = forwardTraceroute.split("\n");
+		for (int i = 0; i < forwardTracerouteArray.length; i++) {
+	   		String ipAddr = forwardTracerouteArray[i];
 			sbJSON.append("\"" + ipAddr + "\"");
-			if (i < forwardTracerouteList.size() - 1) {
+			if (i < forwardTracerouteArray.length - 1) {
 				sbJSON.append(",");
 			}
 		}
 		sbJSON.append("]}");
 		return sbJSON.toString();
+	}
+
+	/**
+	 * post the forward traceroute to the verfication URL.
+	 * @param requestid unique identifier returned from the handset URL request to track additional information sent via login
+	 * @param terminalIPAddress IP address of terminal which accessed this resource.
+	 */
+	private void postForwardTraceRoute(final String requestId, final String terminalIPAddress) throws Exception {
+		Runnable tracerouteRunnable = new Runnable() {
+			@Override
+			public void run() {
+				try {
+					String forwardTraceroute = ProcessUtil.pipeCommand(String.format(TRACEROUTE_CMD, terminalIPAddress));
+					System.out.println("forward traceroute : " + forwardTraceroute); 
+					String tracerouteJSON = tracerouteToJSON(forwardTraceroute);
+					String postTracerouteUrlStr = String.format(POST_TRACEROUTE_URL_FORMAT, Constants.getVerifyAddress(), requestId);
+					URL postTracerouteUrl = new URL(postTracerouteUrlStr); 
+					ServletUtil.postUrlString(postTracerouteUrl, tracerouteJSON);
+				} catch (Exception ex) {
+					System.out.println("error obtaining traceroute to terminal " + ex.getMessage());
+					ex.printStackTrace();
+				}
+			}
+		};
+		Thread thread = new Thread(tracerouteRunnable);
+		thread.start();
 	}
 
 	private static JSONObject parseJSONFromStream(InputStream in) throws UnsupportedEncodingException, IOException {
@@ -179,10 +210,16 @@ public class ProcessLoginServlet extends HttpServlet {
 		return new JSONObject(responseStrBuilder.toString());
 	}
 
+	/**
+	 * 1st response from the verify servlet
+	 * Contains the non-NATTed IP address of the handset, token to match from redirected website, the
+	 * requestId generated by the verify servlet, and the error message if any.
+	 */
 	private class HandsetURLAndToken {
-		String handsetURL;
-		String token;
-		String error;
+		private String handsetURL;
+		private String token;
+		private String requestId;
+		private String error;
 
 
 		public HandsetURLAndToken(InputStream is) throws UnsupportedEncodingException, IOException {
@@ -191,7 +228,20 @@ public class ProcessLoginServlet extends HttpServlet {
 			if (error.equals("SUCCESS")) {
 				token = jsonObject.getString("token");
 				handsetURL = jsonObject.getString("handsetURL");
+				requestId = jsonObject.getString("requestId");
+				System.out.println("HandsetInfo: error = " + error + " url = " + handsetURL + " requestId = " + requestId);
+			} else {
+				System.out.println("HandsetInfo: error = " + error + " requestId = " + requestId);
 			}
+		}
+
+		// save the token from verification with the sessionID
+		public void saveToken(Connection connection, String sessionId) throws Exception {
+			PreparedStatement updateStatement = connection.prepareStatement(UPDATE_TOKEN_AND_SESSION_ID);
+			updateStatement.setString(1, token);
+			updateStatement.setString(2, requestId);
+			updateStatement.setString(3, sessionId);
+			updateStatement.execute();
 		}
 
 		public String getError() {
@@ -204,6 +254,10 @@ public class ProcessLoginServlet extends HttpServlet {
 
 		public String getHandsetURL() {
 			return handsetURL;
+		}
+
+		public String getRequestId() {
+			return requestId;
 		}
 	}
 }
