@@ -51,6 +51,7 @@ public class Verify extends HttpServlet {
 	private static final String SUCCESS_JSON = "{ \"error\": \"SUCCESS\", \"token\": \"%s\", \"handsetURL\": \"%s\", \"requestId\": \"%s\"}";
 	private static final String ERROR_JSON = "{ \"error\": \"FAILURE\", \"requestId\": \"%s\"}";
 	private static final String FROM = "from";
+	private static final String JSON_TAG_TERMINAL_IP_ADDRESS = "terminalIPAddress";
 	private static String mVerificationResult;
 	private static SmackCcsClient.XMPPRunnable mXMPPRunnable;
     private static boolean mCcsClientConnected = false;
@@ -91,12 +92,13 @@ public class Verify extends HttpServlet {
       	response.setContentType("application/json");
 		System.out.println("doGet is getting called query = " + request.getQueryString());
 
-		// parse the URL into a VerifyRequest object
+		// parse the URL and post data into a VerifyRequest object
 		VerifyRequest verifyRequest = null; 
 		String errorMessage = null;
 		int errorCode = SUCCESS;
 		try {
-			verifyRequest = new VerifyRequest(request.getQueryString());
+			String postData = ServletUtil.readPostData(request);
+			verifyRequest = new VerifyRequest(request.getQueryString(), postData);
 			verifyRequest.log();
 		} catch (Exception ex) {
 			errorMessage = ex.getMessage();
@@ -106,14 +108,6 @@ public class Verify extends HttpServlet {
 		// generate a random # to send to the mobile (TODO: make this SecureRandom()
         Random random = new Random();
         long messageId = random.nextLong();
-
-
-		// read the traceroute sent from the third-party website.
-		// TODO: receive this in a separate request for performance.
-        String postData = ServletUtil.readPostData(request);
-        System.out.println("post data = " + postData);
-		JSONObject jsonObject = new JSONObject(postData);
-		String terminalIPAddressFromJSON = jsonObject.getString("terminalIPAddress");
 
 		try {
 			if ((verifyRequest != null) && (verifyRequest.getPhoneNumber() != null) && (verifyRequest.getClientId() != null)) {
@@ -209,12 +203,14 @@ public class Verify extends HttpServlet {
 	 * requestIp Address of this servlet to send the response to.
 	 */
 	public String sendTokenAndWaitForHandsetURL(ClientData clientData,
-							 					final VerifyRequest request,
+							 					final VerifyRequest verifyRequest,
 							 					final long messageId,
 												CipherUtil.Token token) {
 		System.out.println("sending message to " + clientData.getGCMMessagingId());
 		mVerificationResult = null;
 		try {
+			
+			// maintain a continuous connection to the XMPP service, and install a thread which listens to messages.
 			synchronized(this) {
 				if (!mCcsClientConnected) {
 					mXMPPRunnable = new SmackCcsClient.XMPPRunnable(Constants.getGCMProjectId(), Constants.getGCMApiKey(), 
@@ -228,24 +224,27 @@ public class Verify extends HttpServlet {
 			String ccsMessageId = mXMPPRunnable.getCcsClient().nextMessageId();
 			Map<String, String> payload = new HashMap<String, String>();
 			payload.put("RequestAuthorization", "Request");
-			payload.put("destIpAddress", request.getSiteIPAddress());
-			payload.put("requestId", request.getRequestId());
+			payload.put("destIpAddress", verifyRequest.getSiteIPAddress());
+			payload.put("requestId", verifyRequest.getRequestId());
 			payload.put("messageId", ccsMessageId);
-			payload.put("maxHops", Integer.toString(request.getMaxHops()));
+			payload.put("maxHops", Integer.toString(verifyRequest.getMaxHops()));
 			payload.put("embeddedMessageId", Long.toString(messageId));
 			payload.put("delivery_receipt_requested", "true");
 			payload.put("token", token.getEncryptedToken());
+			if (verifyRequest.getClientMessage() != null) {
+				payload.put("client_message", verifyRequest.getClientMessage());
+			}
 
 			// what should this be?
 			String collapseKey = "sample";
 			HandsetURLCallback callback = new HandsetURLCallback();
 			mXMPPRunnable.getCcsClient().addStanzaCallback(FROM, clientData.getGCMMessagingId(), Constants.getGCMProjectId(),
-														   callback, XMPP_TIMEOUT_MSEC);
+														   callback, verifyRequest.getTimeoutMsec());
 			Long timeToLive = DEFAULT_TIME_TO_LIVE;
 			String message = createGCMMessage(clientData.getGCMMessagingId(), ccsMessageId, payload, collapseKey, timeToLive, false);
 			System.out.println("sending " + message);
 			mXMPPRunnable.getCcsClient().sendDownstreamMessage(message);
-			saveRequestToDatabase(request.getRequestId(), messageId, token.getToken());
+			saveRequestToDatabase(verifyRequest.getRequestId(), messageId, token.getToken());
 			waitForHandsetResponse(callback);
 			return callback.getHandsetURL();	
 		} catch (Exception ex) {
@@ -267,14 +266,15 @@ public class Verify extends HttpServlet {
 
     /**
      * Creates a JSON encoded GCM message.
-     *
+     * see https://developers.google.com/cloud-messaging/http-server-ref
      * @param to RegistrationId of the target device (Required).
      * @param messageId Unique messageId for which CCS will send an
      *         "ack/nack" (Required).
      * @param payload Message content intended for the application. (Optional).
      * @param collapseKey GCM collapse_key parameter (Optional).
      * @param timeToLive GCM time_to_live parameter (Optional).
-     * @param delayWhileIdle GCM delay_while_idle parameter (Optional).
+     * @param delayWhileIdle GCM delay_while_idle parameter (Optional). Delay sending the message if
+	 *		  the device is idle.
      * @return JSON encoded GCM message.
      */
     public static String createGCMMessage(String to, String messageId,
@@ -291,9 +291,10 @@ public class Verify extends HttpServlet {
         if (delayWhileIdle != null && delayWhileIdle) {
             message.put("delay_while_idle", true);
         }
-      message.put("message_id", messageId);
-      message.put("data", payload);
-      return JSONValue.toJSONString(message);
+      	message.put("priority", "high");
+      	message.put("message_id", messageId);
+      	message.put("data", payload);
+      	return JSONValue.toJSONString(message);
     }
 
     /**

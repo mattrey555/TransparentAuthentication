@@ -2,7 +2,11 @@ package com.visibleautomation.verify;
 import java.net.URLDecoder;
 import java.io.UnsupportedEncodingException;
 import java.util.UUID;
+import org.json.JSONObject;
 
+/**
+ * parse the URL and JSON post data for a verification request
+ */
 public class VerifyRequest {
     // phone number used as a unique identifier, which is associated with the GCM client ID in the database
     private static final String PHONE_NUMBER = "phoneNumber"; 
@@ -19,22 +23,29 @@ public class VerifyRequest {
     // IP address of accessing terminal
     private static final String TERMINAL_IPADDRESS = "terminalIPAddress"; 
 
-    // timeout to connect to clinet
+    // timeout to connect to client
     private static final String TIMEOUT_MSEC = "timeoutMsec"; 
 
     // callback URL for posting traceroute
     private static final String CALLBACK_URL = "callbackUrl"; 
 
+	// JSON tag for the IP address of the terminal which accessed the website.
+	private static final String JSON_TAG_TERMINAL_IP_ADDRESS = "terminalIPAddress";
+
+	// JSON tag for custom client message
+	private static final String JSON_TAG_CLIENT_MESSAGE = "clientMessage";
+
     private String phoneNumber;
     private String clientId;
     private String terminalIPAddress;
+    private String clientMessage;
     private String siteIPAddress;
     private String callbackUrl;
     private String requestId;
     private int maxHops = 16;
     private int timeoutMsec = 20000;
 
-    public VerifyRequest(String queryString) throws Exception {
+    public VerifyRequest(String queryString, String postData) throws Exception {
 		String[] pairs = queryString.split("&");
 		for (String pair : pairs) {
 			String param = getParam(pair); 
@@ -62,6 +73,13 @@ public class VerifyRequest {
 				callbackUrl = value;
 			}               
 		}           
+
+        // read the traceroute sent from the third-party website.
+        // TODO: receive this in a separate request for performance.
+        System.out.println("post data = " + postData);
+        JSONObject jsonObject = new JSONObject(postData);
+        terminalIPAddress = jsonObject.getString(JSON_TAG_TERMINAL_IP_ADDRESS);
+		clientMessage = jsonObject.getString(JSON_TAG_CLIENT_MESSAGE);
 		requestId = UUID.randomUUID().toString();
     }
 
@@ -97,6 +115,10 @@ public class VerifyRequest {
     	return callbackUrl;
     }
 
+	public String getClientMessage() {
+		return clientMessage;
+	}
+
 	public void log() {
         System.out.println("parameters parsed");
         System.out.println("phoneNumber = " + phoneNumber);
@@ -106,6 +128,7 @@ public class VerifyRequest {
         System.out.println("maxHops = " + maxHops);
         System.out.println("timeoutMsec = " + timeoutMsec);
         System.out.println("callbackUrl = " + callbackUrl);
+        System.out.println("clientMessage = " + clientMessage);
 	}
 
     public String getParam(String pair) throws UnsupportedEncodingException {

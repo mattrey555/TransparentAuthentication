@@ -42,7 +42,9 @@ public class ProcessLoginServlet extends HttpServlet {
 	private static final String POST_TRACEROUTE_URL_FORMAT = "https://%s/verify/postTraceroute?requestId=%s";
 	private static final String IP_REGEXP = "\"[0-9]*\\.[0-9]*\\.[0-9]*\\.[0-9]*\"";
 	private static final String TRACEROUTE_CMD = "traceroute -n --module=udp --queries=1 %s -w 0.25 --back | grep -v \"\\*\" | grep -o " + IP_REGEXP;
+	private static final String VERIFY_REQUEST_JSON_FORMAT = "{\"%s\" : \"%s\",\"%s\" : \"%s\" }";
 	private static final String JSON_TAG_TERMINAL_IP_ADDRESS = "terminalIPAddress";
+	private static final String JSON_TAG_CLIENT_MESSAGE = "clientMessage";
 	private static final String JSON_TAG_TRACEROUTE = "traceroute";
    	private static final String URL_PARAM_USERNAME = "username";
 	private static final String URL_PARAM_PASSWORD = "password";
@@ -110,7 +112,7 @@ public class ProcessLoginServlet extends HttpServlet {
 												    Constants.getMaxHops(), Constants.getTimeoutMsec());
 				System.out.println(verifyURLStr);
 				URL verifyURL = new URL(verifyURLStr);
-				HttpURLConnection verifyUrlConnection = ServletUtil.postUrlString(verifyURL, createPayload(terminalIPAddress));
+				HttpURLConnection verifyUrlConnection = ServletUtil.postUrlString(verifyURL, createPayload(terminalIPAddress, "verification request"));
 				HandsetURLAndToken handsetURLAndToken = new HandsetURLAndToken(verifyUrlConnection.getInputStream()); 
 				if (handsetURLAndToken.getError().equals("SUCCESS")) {
 					handsetURLAndToken.saveToken(sDBConnection, sessionId);
@@ -153,8 +155,8 @@ public class ProcessLoginServlet extends HttpServlet {
     }
 
 	// Create the JSON payload including the terminal IP address and the traceroute to it.
-	private String createPayload(String terminalIPAddress) throws Exception {
-		return String.format("{\"%s\" : \"%s\"}", JSON_TAG_TERMINAL_IP_ADDRESS, terminalIPAddress);
+	private String createPayload(String terminalIPAddress, String clientMessage) throws Exception {
+		return String.format(VERIFY_REQUEST_JSON_FORMAT, JSON_TAG_TERMINAL_IP_ADDRESS, terminalIPAddress, JSON_TAG_CLIENT_MESSAGE, clientMessage);
 	}
 
 	private String tracerouteToJSON(String forwardTraceroute) {
