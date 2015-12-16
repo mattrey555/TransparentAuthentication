@@ -131,7 +131,7 @@ public class Verify extends HttpServlet {
 
 			}
 		} catch (Exception ex) {
-		    ex.printStackTrace();
+			logger.error("registration failed", ex);
 		}
 	}
 
@@ -271,7 +271,7 @@ public class Verify extends HttpServlet {
 			waitForHandsetResponse(callback);
 			return callback;
 		} catch (Exception ex) {
-			ex.printStackTrace();
+			logger.error("error waiting for response from handset", ex);
 			return null;
 		}
 	}
