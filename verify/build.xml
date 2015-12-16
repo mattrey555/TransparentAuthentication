@@ -21,12 +21,15 @@
 		<pathelement location="${lib}/smack-im-${smack-version}.jar" />
 		<pathelement location="${lib}/smack-java7-${smack-version}.jar" />
 		<pathelement location="${lib}/smack-sasl-provided-${smack-version}.jar" />
-		<pathelement location="${lib}/xpp3-1.1.4c.jar" />
+		<pathelement location="${lib}/xpp3-${xpp3-version}.jar" />
 		<pathelement location="${lib}/org.json-${json-version}.jar" />
 		<pathelement location="${lib}/gson-${gson-version}.jar" /> 
 	    <pathelement location="${lib}/json-simple-${json-simple-version}.jar" />
+	    <pathelement location="${lib}/log4j-api-${log4-version}.jar" />
+	    <pathelement location="${lib}/log4j-core-${log4-version}.jar" />
 		<pathelement location="${lib}/xmpp_lib.jar" />
 	    <pathelement location="${lib}/tmfa_util.jar" />
+									    
     </path>
 	<target name="copy-properties">
 		<copy todir="${classes-directory}">

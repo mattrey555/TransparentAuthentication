@@ -4,6 +4,8 @@ import java.util.ArrayList;
 import org.jivesoftware.smack.tcp.XMPPTCPConnection;
 import org.jivesoftware.smack.tcp.XMPPTCPConnectionConfiguration;
 import org.jivesoftware.smack.filter.StanzaFilter;
+import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.LogManager;
 
 /**
  * This variant of XMPPTCPCOnnection maintains a list of custom packet listeners with associated callbacks
@@ -15,9 +17,12 @@ import org.jivesoftware.smack.filter.StanzaFilter;
  */
 public class XMPPTCPStanzaConnection extends XMPPTCPConnection {
     public List<ListenerInfo> listenerList;
+	private static Logger logger;
 
     public XMPPTCPStanzaConnection(XMPPTCPConnectionConfiguration config) {
     	super(config);
+		logger = LogManager.getLogger(XMPPTCPStanzaConnection.class);
+		logger.debug("initialization");
 		listenerList = new ArrayList<ListenerInfo>();
     }
 
@@ -60,13 +65,13 @@ public class XMPPTCPStanzaConnection extends XMPPTCPConnection {
 		while (!listenerList.isEmpty()) {
 			ListenerInfo listenerInfo = listenerList.get(0);
 			if (currentTimeMillis - lastCurrentTimeMillis > 1000) {
-				System.out.println("installedTimeSec = " + listenerInfo.getInstallTimeMsec()/1000 + 
+				logger.debug("installedTimeSec = " + listenerInfo.getInstallTimeMsec()/1000 + 
 								   " timeout sec =  " + listenerInfo.getListener().getTimeoutMsec()/1000 + 
 								   " current time sec = " + currentTimeMillis/1000);
 				lastCurrentTimeMillis = currentTimeMillis;
 			}
 			if (listenerInfo.getInstallTimeMsec() + listenerInfo.getListener().getTimeoutMsec() < currentTimeMillis) {
-				System.out.println("callback expired");
+				logger.debug("callback expired");
 				listenerInfo.getListener().getCallback().expired();
 				listenerList.remove(0);
 			} else {

@@ -12,6 +12,8 @@ import org.json.JSONObject;
 import org.json.JSONArray;
 import org.json.simple.parser.ParseException;
 import com.visibleautomation.util.ServletUtil;
+import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.LogManager;
 
 /**
  * Servlet that saves the traceroute under the reqest ID
@@ -20,29 +22,31 @@ public class SaveTraceroute extends HttpServlet {
 	private static final String UPDATE_CLIENT_TRACEROUTE = "UPDATE request set CLIENT_TRACEROUTE=? where REQUEST_ID=?";
 	private static final String REQUEST_ID = "requestId";
 	private static Connection sDBConnection;
+	private static Logger logger;
 
 	/**
      * static initialization: load the properties into constants, load the JDBC devier, and open the connection to the database.
      */
     static {
-        System.out.println("Verify: static initialization for sql.properties");
+		Logger logger = LogManager.getLogger(SaveTraceroute.class);
+        logger.debug("Verify: static initialization for sql.properties");
 		Constants.setDatabaseVariables();
 		try {
 			Class.forName("com.mysql.jdbc.Driver");
 			String dbConnection = String.format(Constants.DB_CONNECTION_FORMAT, Constants.getDBDatabase());
 			sDBConnection = DriverManager.getConnection(dbConnection, Constants.getDBUsername(), Constants.getDBPassword());
 		} catch (Exception ex) {
-			System.out.println("failed to initialize database " + ex.getMessage());
+			logger.debug("failed to initialize database " + ex.getMessage());
 		}
     }
 
 	public SaveTraceroute() {
-		System.out.println("constructor is called");
+		logger.debug("constructor is called");
   	}
 
 	public void init() throws ServletException {
       	// Do required initialization
-      	System.out.println("init is getting called");
+      	logger.debug("init is getting called");
 	}
 
 	
@@ -53,7 +57,7 @@ public class SaveTraceroute extends HttpServlet {
 	public void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
       	// Set response content type
       	response.setContentType("application/json");
-		System.out.println("doPost is getting called query = " + request.getQueryString());
+		logger.debug("doPost is getting called query = " + request.getQueryString());
 		String queryString = request.getQueryString();
 		String requestId = null;
 		String[] pairs = queryString.split("&");
@@ -64,17 +68,17 @@ public class SaveTraceroute extends HttpServlet {
 				requestId = ServletUtil.getValue(pair);
 			}
 		}
-		System.out.println("SaveTraceroute: requestId = " + requestId);
+		logger.debug("SaveTraceroute: requestId = " + requestId);
 		if (requestId != null) {
         	String postData = ServletUtil.readPostData(request);
-        	System.out.println("post data = " + postData);
+        	logger.debug("post data = " + postData);
 			JSONObject jsonObject = new JSONObject(postData);
 			JSONArray tracerouteArray = jsonObject.getJSONArray("traceroute");
 			String traceroute = getTracerouteString(tracerouteArray);
 			try {	
 				saveTraceroute(requestId, traceroute);
 			} catch (SQLException sqlex) {
-				System.out.println("exception writing traceroute for " + requestId);
+				logger.error("exception writing traceroute for " + requestId);
 				sqlex.printStackTrace();
 			}
 		}
@@ -100,6 +104,6 @@ public class SaveTraceroute extends HttpServlet {
 	}
   
 	public void destroy() {
-      	// do nothing.
+      	logger.debug("destroy called");
 	}
 } 

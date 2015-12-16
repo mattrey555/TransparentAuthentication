@@ -16,6 +16,8 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.PreparedStatement;
+import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.LogManager;
 
 // subclass containing the phone number, messaging ID, and public key for a specific client.
 public class ClientData {
@@ -23,6 +25,7 @@ public class ClientData {
     private String phoneNumber;
     private String gcmMessagingId;
     private String publicKey;
+	private static Logger logger = LogManager.getLogger(ClientData.class);
 
     public ClientData(Connection con, String phoneNumber) throws Exception {
 		this.phoneNumber = phoneNumber;
@@ -31,17 +34,17 @@ public class ClientData {
 	    selectStatement.setString(1, phoneNumber);
 	    ResultSet rs = selectStatement.executeQuery();
 	    if (rs.first()) {
-			System.out.println("there is a matching record for " + phoneNumber);
+			logger.debug("there is a matching record for " + phoneNumber);
 			int phoneNumberColIndex = rs.findColumn("PHONE_NUMBER");
 			String testPhoneNumber = rs.getString(phoneNumberColIndex);
 			int clientUserIdColIndex = rs.findColumn("USER_ID");
 			gcmMessagingId = rs.getString(clientUserIdColIndex);
 			int publicKeyColIndex = rs.findColumn("PUBLIC_KEY");
 			publicKey = rs.getString(publicKeyColIndex);
-			System.out.println("and the user id is " + userId);
+			logger.debug("and the user id is " + userId);
 			rs.close();
 	    } else {
-			System.out.println("there was no user matching " + phoneNumber);
+			logger.error("there was no user matching " + phoneNumber);
 	    }
     }
 

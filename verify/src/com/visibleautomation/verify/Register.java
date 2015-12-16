@@ -18,6 +18,8 @@ import java.net.URLDecoder;
 import java.util.Map;
 import javax.servlet.http.*;
 import com.google.gson.Gson;
+import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.LogManager;
 
 // user (ID INT, CLIENT_USER_ID VARCHAR(64) NOT NULL, USER_ID VARCHAR(64) NOT NULL, phone_number varchar(64) PRIMARY KEY(ID)
 // client (ID INT, CLIENT_ID VARCHAR(64) NOT NULL, CLIENT_USER_ID VARCHAR(64) NOT NULL, PRIMARY KEY (ID));
@@ -29,21 +31,23 @@ public class Register extends HttpServlet {
 	private static final String JSON_FORMAT = "{ \"registrationId\" : \"%s\", \"statusCode\" : %d, \"errorMessage\" : \"%s\" }";
 	private static final String SELECT_BY_PHONE = "select * from user where phone_number=?";
 	private static final String INSERT_CLIENT = "insert into user values (0,?,?,?,?)";
+	private static Logger logger;
 
     static {
-        System.out.println("Verify: static initialization for properties");
+	    logger = LogManager.getLogger(Register.class);
+        logger.debug("Verify: static initialization for properties");
 		Constants.setDatabaseVariables();
 		Constants.setGCMVariables();
     }
 
   	public Register() {
-		System.out.println("constructor is called");
+		logger.debug("constructor is called");
   	}
 
   	public void init() throws ServletException
   	{
       	// Do required initialization
-      	System.out.println("init is getting called");
+      	logger.debug("init is getting called");
   	}
 
   	public void doPost(HttpServletRequest 	request,
@@ -83,13 +87,13 @@ public class Register extends HttpServlet {
 		} catch (Exception ex) {
             errorMessage = ex.getMessage();
             errorCode = DATABASE_CONNECTION_FAILED;
-			System.out.println("threw an exception connection to " + url);
+			logger.error("threw an exception connection to " + url);
 			ex.printStackTrace();
 		}
         String json = String.format(JSON_FORMAT, registrationRequest.getRegistrationId(), errorCode, errorMessage);
         PrintWriter out = response.getWriter();
         out.println(json);
-        System.out.println(json);
+        logger.debug(json);
   }
 
   public String getParam(String pair) throws UnsupportedEncodingException {

@@ -8,8 +8,10 @@
     		<pathelement location="${lib}/smack-im-${smack-version}.jar" />
     		<pathelement location="${lib}/smack-java7-${smack-version}.jar" />
     		<pathelement location="${lib}/smack-sasl-provided-${smack-version}.jar" />
-    		<pathelement location="${lib}/json-simple-1.1.1.jar" />
-    		<pathelement location="${lib}/xpp3-1.1.4c.jar" />
+    		<pathelement location="${lib}/json-simple-${json-simple-version}.jar" />
+    		<pathelement location="${lib}/xpp3-${xpp3-version}.jar" />
+			<pathelement location="${lib}/log4j-api-${log4-version}.jar" />
+			<pathelement location="${lib}/log4j-core-${log4-version}.jar" />
   	</path>
 	<tstamp prefix="build-info">
 		<format property="current-date" pattern="d-MMMM-yyyy" locale="en" />

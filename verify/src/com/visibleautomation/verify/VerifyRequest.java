@@ -3,6 +3,8 @@ import java.net.URLDecoder;
 import java.io.UnsupportedEncodingException;
 import java.util.UUID;
 import org.json.JSONObject;
+import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.LogManager;
 
 /**
  * parse the URL and JSON post data for a verification request
@@ -35,6 +37,9 @@ public class VerifyRequest {
 	// JSON tag for custom client message
 	private static final String JSON_TAG_CLIENT_MESSAGE = "clientMessage";
 
+	// JSON tag user-agent of terminal requesting access.
+	private static final String JSON_TAG_USER_AGENT = "userAgent";
+
     private String phoneNumber;
     private String clientId;
     private String terminalIPAddress;
@@ -42,15 +47,17 @@ public class VerifyRequest {
     private String siteIPAddress;
     private String callbackUrl;
     private String requestId;
+	private String userAgent;
     private int maxHops = 16;
     private int timeoutMsec = 20000;
+	private Logger logger =  LogManager.getLogger(VerifyRequest.class);
 
     public VerifyRequest(String queryString, String postData) throws Exception {
 		String[] pairs = queryString.split("&");
 		for (String pair : pairs) {
 			String param = getParam(pair); 
 			String value = getValue(pair); 
-			System.out.println("param = " + param + " value = " + value);
+			logger.debug("param = " + param + " value = " + value);
 			if (param.equals(PHONE_NUMBER)) {
 				phoneNumber = value;
 			}              
@@ -76,10 +83,11 @@ public class VerifyRequest {
 
         // read the traceroute sent from the third-party website.
         // TODO: receive this in a separate request for performance.
-        System.out.println("post data = " + postData);
+        logger.debug("post data = " + postData);
         JSONObject jsonObject = new JSONObject(postData);
         terminalIPAddress = jsonObject.getString(JSON_TAG_TERMINAL_IP_ADDRESS);
 		clientMessage = jsonObject.getString(JSON_TAG_CLIENT_MESSAGE);
+		userAgent = jsonObject.getString(JSON_TAG_USER_AGENT);
 		requestId = UUID.randomUUID().toString();
     }
 
@@ -119,16 +127,22 @@ public class VerifyRequest {
 		return clientMessage;
 	}
 
+	public String getUserAgent() {
+		return userAgent;
+	}
+
+
 	public void log() {
-        System.out.println("parameters parsed");
-        System.out.println("phoneNumber = " + phoneNumber);
-        System.out.println("clientId = " + clientId);
-        System.out.println("siteIPAddress = " + siteIPAddress);
-        System.out.println("terminalIPAddress = " + terminalIPAddress);
-        System.out.println("maxHops = " + maxHops);
-        System.out.println("timeoutMsec = " + timeoutMsec);
-        System.out.println("callbackUrl = " + callbackUrl);
-        System.out.println("clientMessage = " + clientMessage);
+        logger.debug("parameters parsed");
+        logger.debug("phoneNumber = " + phoneNumber);
+        logger.debug("clientId = " + clientId);
+        logger.debug("siteIPAddress = " + siteIPAddress);
+        logger.debug("terminalIPAddress = " + terminalIPAddress);
+        logger.debug("maxHops = " + maxHops);
+        logger.debug("timeoutMsec = " + timeoutMsec);
+        logger.debug("callbackUrl = " + callbackUrl);
+        logger.debug("clientMessage = " + clientMessage);
+        logger.debug("userAgent = " + userAgent);
 	}
 
     public String getParam(String pair) throws UnsupportedEncodingException {

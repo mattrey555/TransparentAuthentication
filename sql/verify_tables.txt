@@ -18,12 +18,15 @@ create table request (REQUEST_ID VARCHAR(512) NOT NULL PRIMARY KEY,
 		      REQUEST_TOKEN VARCHAR(128),
 		      LATITUDE DECIMAL,
 		      LONGITUDE DECIMAL,
+			  TERMINAL_IP_ADDRESS VARCHAR(128),
+			  USER_AGENT VARCHAR(128),
 		      HANDSET_IP_ADDRESS VARCHAR(128),
 		      WIFI_MAC_ADDR VARCHAR(128),
 		      REQUEST_TIMESTAMP BIGINT NOT NULL,
 		      CALLBACK_URL VARCHAR(512),
-			  VERIFY_TRACEROUTE VARCHAR(4096),
-			  CLIENT_TRACEROUTE VARCHAR(4096));
+			  VERIFY_TRACEROUTE VARCHAR(1024),
+			  CLIENT_TRACEROUTE VARCHAR(1024),
+			  ERROR_MESSAGE VARCHAR(1024));
 create index client_client_id on client(client_id);
 create index client_phone_number on client(phone_number);
 create index client_client_user_id on client(client_user_id);

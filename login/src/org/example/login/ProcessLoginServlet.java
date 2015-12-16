@@ -28,6 +28,7 @@ import java.io.UnsupportedEncodingException;
 import java.io.IOException;
 import java.util.List;
 import java.util.Properties;
+import java.util.Enumeration;
 import com.visibleautomation.util.StringUtil;
 import com.visibleautomation.util.ServletUtil;
 import com.visibleautomation.util.ProcessUtil;
@@ -42,13 +43,15 @@ public class ProcessLoginServlet extends HttpServlet {
 	private static final String POST_TRACEROUTE_URL_FORMAT = "https://%s/verify/postTraceroute?requestId=%s";
 	private static final String IP_REGEXP = "\"[0-9]*\\.[0-9]*\\.[0-9]*\\.[0-9]*\"";
 	private static final String TRACEROUTE_CMD = "traceroute -n --module=udp --queries=1 %s -w 0.25 --back | grep -v \"\\*\" | grep -o " + IP_REGEXP;
-	private static final String VERIFY_REQUEST_JSON_FORMAT = "{\"%s\" : \"%s\",\"%s\" : \"%s\" }";
+	private static final String VERIFY_REQUEST_JSON_FORMAT = "{\"%s\" : \"%s\", \"%s\" : \"%s\", \"%s\" : \"%s\"}";
 	private static final String JSON_TAG_TERMINAL_IP_ADDRESS = "terminalIPAddress";
 	private static final String JSON_TAG_CLIENT_MESSAGE = "clientMessage";
 	private static final String JSON_TAG_TRACEROUTE = "traceroute";
+	private static final String JSON_TAG_USER_AGENT = "userAgent";
    	private static final String URL_PARAM_USERNAME = "username";
 	private static final String URL_PARAM_PASSWORD = "password";
 	private static final String URL_PARAM_SESSIONID = "sessionId";
+	private static final String USER_AGENT = "User-Agent";
 	private static Connection sDBConnection;
 	
 	static {
@@ -81,6 +84,9 @@ public class ProcessLoginServlet extends HttpServlet {
 		System.out.println("ProcessLoginServlet: constructor  called");
     }
 
+	/**
+	 * receive the post message with the user name, password, and session ID
+	 */
 	public void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, java.io.IOException {
 
 		try {	    
@@ -89,6 +95,8 @@ public class ProcessLoginServlet extends HttpServlet {
 			String sessionId  = request.getParameter(URL_PARAM_SESSIONID);
 			System.out.println("username = " + username + " password = " + password + " sessionID = " + sessionId);
 			String phoneNumber = verifyLogin(username, password);
+			Enumeration<String> headers = request.getHeaderNames();
+			String userAgent = request.getHeader(USER_AGENT);
 			if (phoneNumber == null) {
 				response.sendRedirect("login_failed.jsp");
 			} else {
@@ -112,23 +120,25 @@ public class ProcessLoginServlet extends HttpServlet {
 												    Constants.getMaxHops(), Constants.getTimeoutMsec());
 				System.out.println(verifyURLStr);
 				URL verifyURL = new URL(verifyURLStr);
-				HttpURLConnection verifyUrlConnection = ServletUtil.postUrlString(verifyURL, createPayload(terminalIPAddress, "verification request"));
-				HandsetURLAndToken handsetURLAndToken = new HandsetURLAndToken(verifyUrlConnection.getInputStream()); 
-				if (handsetURLAndToken.getError().equals("SUCCESS")) {
-					handsetURLAndToken.saveToken(sDBConnection, sessionId);
-					System.out.println("success token = " + handsetURLAndToken.getToken() + 
-									   " handsetURL = " + handsetURLAndToken.getHandsetURL());
+				HttpURLConnection verifyUrlConnection = ServletUtil.postUrlString(verifyURL, createPayload(terminalIPAddress, userAgent, "verification request"));
+				MobileResponse mobileResponse = new MobileResponse(verifyUrlConnection.getInputStream()); 
+				if (mobileResponse.getError().equals("SUCCESS")) {
+					mobileResponse.saveToken(sDBConnection, sessionId);
+					System.out.println("success token = " + mobileResponse.getToken() + 
+									   " handsetURL = " + mobileResponse.getHandsetURL());
 					RequestDispatcher requestDispatcher = request.getRequestDispatcher("/verifying.jsp");
-					request.setAttribute("handsetURL", handsetURLAndToken.getHandsetURL());
+					request.setAttribute("handsetURL", mobileResponse.getHandsetURL());
 					request.setAttribute("sessionId", sessionId);
 					requestDispatcher.forward(request, response);
 				} else {
-					System.out.println("failure getting handset URL and token"); 
-					response.sendRedirect("verification_failed.jsp");
+					RequestDispatcher requestDispatcher = request.getRequestDispatcher("/verification_failed.jsp");
+					System.out.println("mobile response failure");
+					request.setAttribute("error", mobileResponse.getError());
+					requestDispatcher.forward(request, response);
 				}
 
 				// post the traceroute from the terminal to this site, and send it to the verifier
-				postForwardTraceRoute(handsetURLAndToken.getRequestId(), terminalIPAddress);
+				postForwardTraceRoute(mobileResponse.getRequestId(), terminalIPAddress);
 			}
 		} catch (Exception ex) {
 			ex.printStackTrace();
@@ -155,8 +165,11 @@ public class ProcessLoginServlet extends HttpServlet {
     }
 
 	// Create the JSON payload including the terminal IP address and the traceroute to it.
-	private String createPayload(String terminalIPAddress, String clientMessage) throws Exception {
-		return String.format(VERIFY_REQUEST_JSON_FORMAT, JSON_TAG_TERMINAL_IP_ADDRESS, terminalIPAddress, JSON_TAG_CLIENT_MESSAGE, clientMessage);
+	private String createPayload(String terminalIPAddress, String userAgent, String clientMessage) throws Exception {
+		return String.format(VERIFY_REQUEST_JSON_FORMAT, 
+							 JSON_TAG_TERMINAL_IP_ADDRESS, terminalIPAddress, 
+							 JSON_TAG_CLIENT_MESSAGE, clientMessage,
+							 JSON_TAG_USER_AGENT, userAgent);
 	}
 
 	private String tracerouteToJSON(String forwardTraceroute) {
@@ -217,14 +230,14 @@ public class ProcessLoginServlet extends HttpServlet {
 	 * Contains the non-NATTed IP address of the handset, token to match from redirected website, the
 	 * requestId generated by the verify servlet, and the error message if any.
 	 */
-	private class HandsetURLAndToken {
+	private class MobileResponse {
 		private String handsetURL;
 		private String token;
 		private String requestId;
 		private String error;
 
 
-		public HandsetURLAndToken(InputStream is) throws UnsupportedEncodingException, IOException {
+		public MobileResponse(InputStream is) throws UnsupportedEncodingException, IOException {
 			JSONObject jsonObject = parseJSONFromStream(is);
 			error = jsonObject.getString("error");
 			if (error.equals("SUCCESS")) {

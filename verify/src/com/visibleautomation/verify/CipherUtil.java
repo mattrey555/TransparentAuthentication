@@ -13,10 +13,13 @@ import java.io.ByteArrayOutputStream;
 import java.security.KeyFactory;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.Base64;
+import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.LogManager;
 /**
  * Servlet to process the verification request from login
  */
 public class CipherUtil {
+    private static Logger logger = LogManager.getLogger(CipherUtil.class);
 	public static class Token {
 		private final long token;
 	    private final String encryptedToken;
@@ -51,11 +54,12 @@ public class CipherUtil {
 		cipherOutputStream.flush();
 		cipherOutputStream.close();
 		byte[] encryptedBytes = outputStream.toByteArray();
-		System.out.println("base64 Encoded Encrypted bytes");
+		logger.debug("base64 Encoded Encrypted bytes");
+		StringBuffer sb = new StringBuffer(encryptedBytes.length*4);
 		for (int i = 0; i < encryptedBytes.length; i++) {
-			System.out.print(String.format("%02X ", encryptedBytes[i]));
+			sb.append(String.format("%02X ", encryptedBytes[i]));
 		}
-		System.out.println("");
+		logger.debug("base64 Encoded Encrypted bytes " + sb.toString());
 		encryptedToken = Base64.getEncoder().encodeToString(encryptedBytes);
 	    return new Token(randVal, encryptedToken);
 	}

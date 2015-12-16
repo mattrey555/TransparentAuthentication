@@ -6,6 +6,6 @@
         <title>Verification Failed</title>
     </head>
     <body>
-	<h2>Verification Failed</h2>
+	<h2>Verification Failed error = ${error}</h2>
     </body>
 </html>

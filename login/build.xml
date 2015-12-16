@@ -22,6 +22,8 @@
 	    <pathelement location="${jetty-lib}/mysql-connector-java-${mysql-version}-bin.jar" />
 	    <pathelement location="${jetty-jsp}/org.mortbay.jasper.apache-jsp-${jsp-version}.jar" />
 	    <pathelement location="${jetty-jsp}/org.mortbay.jasper.apache-el-${jsp-version}.jar" />
+		<pathelement location="${lib}/log4j-api-${log4-version}.jar" />
+		<pathelement location="${lib}/log4j-core-${log4-version}.jar" />
 		<pathelement location="${lib}/org.json-${json-version}.jar" />
 		<pathelement location="${lib}/tmfa_util.jar" />
     </path>
