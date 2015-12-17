@@ -118,7 +118,10 @@ public class Verify extends HttpServlet {
 			    CipherUtil.Token token = CipherUtil.getEncryptedToken(clientData.getPublicKey());
 				MobileResponseCallback responseCallback  = sendTokenAndWaitForResponse(clientData, verifyRequest, messageId, token);
 				PrintWriter out = response.getWriter();
-				if (responseCallback.getHandsetURL() != null) {
+				if (responseCallback.getError() != null) {
+					logger.debug("returning failure error " + responseCallback.getError());
+					out.println(String.format(ERROR_JSON, responseCallback.getError(), verifyRequest.getRequestId()));
+				} else if (responseCallback.getHandsetURL() != null) {
 					logger.debug("returning success message");
 					out.println(String.format(SUCCESS_JSON, token.getToken(), responseCallback.getHandsetURL(), verifyRequest.getRequestId()));
 				} else if (responseCallback.hasExpired()) {
@@ -143,9 +146,11 @@ public class Verify extends HttpServlet {
 		private static final String EXTRA_NETWORK = "network";
 		private static final String VALUE_CELLULAR = "cellular";
 		private static final String EXTRA_DATA = "data";
+		private static final String EXTRA_ERROR = "error";
 		private String handsetURL = null;
 		private boolean cellular = false;
 		private boolean expired = false;
+		private String error = null;
 
 		/**
 		 * wait for the "data" JSON object to come back from the handset
@@ -164,8 +169,13 @@ public class Verify extends HttpServlet {
 			// if the handset was connected to the cellular network, we get {"network" : "cellular"} in the response
 			// and we want to send that back to the third party so they can inform the user to switch over to Wifi
 			// for verification.
+			// for errors, we get: {"error":"DenyAuthorization"}, or other errors
 			String network = (String) jsonDataObject.get(EXTRA_NETWORK);
-			if ((network == null) || !network.equals(VALUE_CELLULAR)) {
+			error = (String) jsonDataObject.get(EXTRA_ERROR);
+			if (error != null) {
+				logger.debug("error = " + error);
+				mXMPPRunnable.getCcsClient().getConnection().removeAssociatedStanzaListener(this);
+			} else if ((network == null) || !network.equals(VALUE_CELLULAR)) {
 	   			handsetURL = (String) jsonDataObject.get(EXTRA_HANDSET_ADDRESS);	
 				if (handsetURL != null) {
 					logger.debug("handsetURL = " + handsetURL);
@@ -192,6 +202,10 @@ public class Verify extends HttpServlet {
 
 		public boolean isCellular() {
 			return cellular;
+		}
+
+		public String getError() {
+			return error;
 		}
 	}
 
@@ -280,14 +294,14 @@ public class Verify extends HttpServlet {
 	 * The XMPPRunnable is running in the background, and we're waiting for a response from the handset.
 	 */
 	public boolean waitForHandsetResponse(MobileResponseCallback callback) {
-		while ((callback.getHandsetURL() == null) && !callback.isCellular() && !callback.hasExpired()) {
+		while ((callback.getHandsetURL() == null) && !callback.isCellular() && !callback.hasExpired() && (callback.getError() == null)) {
 			try {
 				Thread.sleep(20);
 			} catch (InterruptedException iex) {
 				break;
 			}
 		}
-		return (callback.getHandsetURL() != null);
+		return (callback.getHandsetURL() != null) || callback.isCellular() || (callback.getError() != null);
 	}
 
     /**
