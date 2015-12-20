@@ -11,24 +11,24 @@
             <table border="1" width="30%" cellpadding="3">
                 <thead>
                     <tr>
-                        <th colspan="2">Login Here</th>
+                        <th colspan="2">Register Here</th>
                     </tr>
                 </thead>
                 <tbody>
                     <tr>
                         <td>User Name</td>
-                        <td><input type="text" name="uname" value="" /></td>
+                        <td><input type="text" name="username" value="" /></td>
                     </tr>
                     <tr>
                         <td>Password</td>
-                        <td><input type="password" name="pass" value="" /></td>
+                        <td><input type="password" name="password" value="" /></td>
                     </tr>
                     <tr>
                         <td>Phone Number</td>
-                        <td><input type="text" name="pass" value="" /></td>
+                        <td><input type="text" name="phone" value="" /></td>
                     </tr>
                     <tr>
-                        <td><input type="submit" value="Login" /></td>
+                        <td><input type="submit" value="Register" /></td>
                         <td><input type="reset" value="Reset" /></td>
                     </tr>
                 </tbody>

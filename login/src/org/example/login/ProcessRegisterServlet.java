@@ -13,6 +13,7 @@ import java.sql.ResultSet;
 import java.sql.PreparedStatement;
 import java.net.URL;
 import java.net.URLConnection;
+import java.util.UUID;
 import java.io.BufferedReader;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -26,7 +27,7 @@ public class ProcessRegisterServlet extends HttpServlet {
 	private static final String SQL_PASSWORD = "FiatX1/9";
 	private static final String SELECT_USERNAME_PASSWORD = "SELECT * FROM USER WHERE USER_ID=? AND PWD=?";
 	// ID autoincrement
-	private static final String INSERT_USER = "INSERT INTO USER VALUES(0, ?, ?, ?)";
+	private static final String INSERT_USER = "INSERT INTO USER VALUES(0, ?, ?, ?, ?)";
 
 	public void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, java.io.IOException {
 
@@ -34,6 +35,11 @@ public class ProcessRegisterServlet extends HttpServlet {
 			String username  = request.getParameter("username");
 			String password  = request.getParameter("password");
 			String phone  = request.getParameter("phone");
+
+			// prefix with a "1" so it matches the actual phone #
+			if (phone.charAt(0) != '1') {
+				phone = "1" + phone;
+			}
 			System.out.println("username = " + username + " password = " + password);
 			String userId = verifyLogin(username, password);
 			if (userId != null) {
@@ -52,9 +58,11 @@ public class ProcessRegisterServlet extends HttpServlet {
         Connection con = DriverManager.getConnection(Constants.DB_CONNECTION, SQL_USER, SQL_PASSWORD);
 		try {
             PreparedStatement insertStatement = con.prepareStatement(INSERT_USER);
-            insertStatement.setString(1, username);
-            insertStatement.setString(2, password);
-            insertStatement.setString(3, phone);
+			String clientUserId = UUID.randomUUID().toString();
+            insertStatement.setString(1, clientUserId);
+            insertStatement.setString(2, username);
+            insertStatement.setString(3, password);
+            insertStatement.setString(4, phone);
 			insertStatement.execute();
         } finally {
             con.close();
