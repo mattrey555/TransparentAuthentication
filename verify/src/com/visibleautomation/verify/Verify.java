@@ -10,6 +10,7 @@ import java.util.Date;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
+import java.util.UUID;
 import java.lang.Thread;
 import java.lang.Runnable;
 import java.net.InetAddress;
@@ -273,7 +274,7 @@ public class Verify extends HttpServlet {
 			}
 
 			// what should this be?
-			String collapseKey = "sample";
+			String collapseKey = UUID.randomUUID().toString();
 			MobileResponseCallback callback = new MobileResponseCallback();
 			mXMPPRunnable.getCcsClient().addStanzaCallback(FROM, clientData.getGCMMessagingId(), Constants.getGCMProjectId(),
 														   callback, verifyRequest.getTimeoutMsec());

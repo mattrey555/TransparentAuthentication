@@ -22,12 +22,20 @@
 	    <delete dir="bin" />
 	    <delete dir="build" />
 	</target>
-        <target name="mkdirs">
-            <mkdir dir="${classes-directory}" />
-            <mkdir dir="${build-directory}" />
-        </target>
+	<target name="mkdirs" description="create build directory">
+		<mkdir dir="${classes-directory}" />
+		<mkdir dir="${build-directory}" />
+	</target>
+    <target name="copy-properties" depends="mkdirs" description="copy properties files from the source directory">
+		<copy todir="${classes-directory}">
+			<fileset dir="${src}">
+				<exclude name="**/*.java"/>
+			</fileset>
+		</copy>
+	</target>
 
- 	<target name="compile" depends="mkdirs" description="compile the source" >
+
+ 	<target name="compile" depends="mkdirs,copy-properties" description="compile the source" >
 	    <mkdir dir="${classes-directory}" />
 	    <javac srcdir="${src}" 
 		    destdir="${classes-directory}"
